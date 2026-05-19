@@ -42,6 +42,7 @@ export default async function DashboardPage() {
   let openMatchesPicked = 0;
 
   let nextCrowd: { home: number; draw: number; away: number; total: number } | null = null;
+  let currentScore: { home: number | null; away: number | null } | null = null;
 
   if (openStages.length > 0) {
     const { data: openMatches } = await supabase
@@ -60,19 +61,29 @@ export default async function DashboardPage() {
       const matchIds = openList.map((m) => m.id);
       const { data: existingPicks } = await supabase
         .from("predictions")
-        .select("match_id, prediction")
+        .select("match_id, prediction, score_home, score_away")
         .eq("user_id", user!.id)
         .in("match_id", matchIds);
 
-      const pickedSet = new Set((existingPicks ?? []).map((p) => p.match_id));
+      const pickedSet = new Set(
+        (existingPicks ?? [])
+          .filter((p) => p.score_home != null && p.score_away != null)
+          .map((p) => p.match_id)
+      );
       openMatchesPicked = pickedSet.size;
       const firstUnpicked = openList.find((m) => !pickedSet.has(m.id));
       if (firstUnpicked) {
         nextMatch = firstUnpicked;
+        const found = (existingPicks ?? []).find((p) => p.match_id === firstUnpicked.id);
+        if (found) {
+          currentPick = (found.prediction as PredictionChoice) ?? null;
+          currentScore = { home: found.score_home ?? null, away: found.score_away ?? null };
+        }
       } else {
         nextMatch = openList[0];
         const found = (existingPicks ?? []).find((p) => p.match_id === openList[0].id);
         currentPick = (found?.prediction as PredictionChoice) ?? null;
+        currentScore = found ? { home: found.score_home ?? null, away: found.score_away ?? null } : null;
       }
 
       if (nextMatch) {
@@ -307,6 +318,7 @@ export default async function DashboardPage() {
           <NextPickCard
             match={nextMatch}
             currentPick={currentPick}
+            currentScore={currentScore}
             remainingOpen={openMatchesTotal - openMatchesPicked}
             totalOpen={openMatchesTotal}
             userId={user!.id}

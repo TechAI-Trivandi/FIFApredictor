@@ -3,8 +3,8 @@
 import { useState, useEffect } from "react";
 import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
-import { format, isSameDay } from "date-fns";
-import { Save, Check } from "lucide-react";
+import { format } from "date-fns";
+import { Save, Check, Pencil, Lock } from "lucide-react";
 import { getTBDLabel, getMatchStageNumber } from "@/lib/bracket-labels";
 import { STAGE_LABELS, STAGE_ORDER } from "@/lib/constants";
 import type { Match, Prediction, PredictionChoice, Team, StageLock } from "@/lib/types";
@@ -27,11 +27,33 @@ interface Props {
   crowd: CrowdMap;
 }
 
-const MIN_CROWD_SAMPLE = 5; // require at least 5 picks before showing %
+const MIN_CROWD_SAMPLE = 5;
+const LOCK_HOURS = 24; // lock predictions this many hours before kickoff
+
+function deriveOutcome(h: number, a: number): PredictionChoice {
+  if (h > a) return "home";
+  if (a > h) return "away";
+  return "draw";
+}
+
+function outcomeLabel(p: PredictionChoice): string {
+  if (p === "home") return "Home win";
+  if (p === "away") return "Away win";
+  return "Draw";
+}
+
+function isMatchLocked(kickoffAt: string): boolean {
+  return new Date(kickoffAt).getTime() - Date.now() < LOCK_HOURS * 60 * 60 * 1000;
+}
+
+function hasSavedScore(p: Prediction | undefined): boolean {
+  return !!(p && p.score_home != null && p.score_away != null);
+}
 
 export function PredictionsList({ matches, predictions, stageLocks, userId, crowd }: Props) {
   const [savedPredictions, setSavedPredictions] = useState(predictions);
   const [drafts, setDrafts] = useState<Record<number, DraftEntry>>({});
+  const [editingIds, setEditingIds] = useState<Set<number>>(new Set());
   const [saving, setSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saved">("idle");
   const supabase = createClient();
@@ -61,7 +83,9 @@ export function PredictionsList({ matches, predictions, stageLocks, userId, crow
       days.push(day);
     }
     day.matches.push(m);
-    if (savedPredictions[m.id] || drafts[m.id]?.prediction) day.pickedCount++;
+    if (hasSavedScore(savedPredictions[m.id]) || (drafts[m.id]?.score_home != null && drafts[m.id]?.score_away != null)) {
+      day.pickedCount++;
+    }
   }
 
   const [activeDayKey, setActiveDayKey] = useState<string | null>(days[0]?.key ?? null);
@@ -84,9 +108,6 @@ export function PredictionsList({ matches, predictions, stageLocks, userId, crow
     return () => window.removeEventListener("beforeunload", h);
   }, [drafts]);
 
-  function getCurrentPick(matchId: number): PredictionChoice | undefined {
-    return drafts[matchId]?.prediction ?? savedPredictions[matchId]?.prediction;
-  }
   function getCurrentScore(matchId: number): { h: number | null; a: number | null } {
     const draft = drafts[matchId];
     if (draft && (draft.score_home != null || draft.score_away != null)) {
@@ -99,21 +120,6 @@ export function PredictionsList({ matches, predictions, stageLocks, userId, crow
     return drafts[matchId] !== undefined;
   }
 
-  function handlePick(matchId: number, choice: PredictionChoice) {
-    setSaveStatus("idle");
-    const saved = savedPredictions[matchId];
-    setDrafts((prev) => {
-      const next = { ...prev };
-      if (saved && saved.prediction === choice && next[matchId] && !next[matchId].score_home && !next[matchId].score_away) {
-        // Reverting to saved value with no score draft → drop the draft
-        delete next[matchId];
-        return next;
-      }
-      next[matchId] = { ...(next[matchId] ?? {}), prediction: choice };
-      return next;
-    });
-  }
-
   function handleScore(matchId: number, side: "h" | "a", n: number) {
     setSaveStatus("idle");
     setDrafts((prev) => {
@@ -123,15 +129,42 @@ export function PredictionsList({ matches, predictions, stageLocks, userId, crow
       const newHome = side === "h" ? n : cur.score_home ?? saved?.score_home ?? null;
       const newAway = side === "a" ? n : cur.score_away ?? saved?.score_away ?? null;
 
-      // Auto-derive outcome from exact score so they never contradict
+      // Auto-derive outcome from score
       let prediction: PredictionChoice | undefined = cur.prediction ?? saved?.prediction;
       if (newHome != null && newAway != null) {
-        if (newHome > newAway) prediction = "home";
-        else if (newAway > newHome) prediction = "away";
-        else prediction = "draw";
+        prediction = deriveOutcome(newHome, newAway);
       }
 
       next[matchId] = { prediction, score_home: newHome, score_away: newAway };
+      return next;
+    });
+  }
+
+  function startEditing(matchId: number) {
+    setEditingIds((prev) => new Set(prev).add(matchId));
+    // Pre-fill draft with saved values so the picker shows current selection
+    const saved = savedPredictions[matchId];
+    if (saved) {
+      setDrafts((prev) => ({
+        ...prev,
+        [matchId]: {
+          prediction: saved.prediction,
+          score_home: saved.score_home,
+          score_away: saved.score_away,
+        },
+      }));
+    }
+  }
+
+  function cancelEditing(matchId: number) {
+    setEditingIds((prev) => {
+      const next = new Set(prev);
+      next.delete(matchId);
+      return next;
+    });
+    setDrafts((prev) => {
+      const next = { ...prev };
+      delete next[matchId];
       return next;
     });
   }
@@ -140,17 +173,21 @@ export function PredictionsList({ matches, predictions, stageLocks, userId, crow
     if (Object.keys(drafts).length === 0) return;
     setSaving(true);
 
-    const rows = Object.entries(drafts).map(([id, d]) => {
-      const matchId = Number(id);
-      const saved = savedPredictions[matchId];
-      return {
+    // Only save drafts that have both scores
+    const rows = Object.entries(drafts)
+      .filter(([, d]) => d.score_home != null && d.score_away != null)
+      .map(([id, d]) => ({
         user_id: userId,
-        match_id: matchId,
-        prediction: (d.prediction ?? saved?.prediction)!,
-        score_home: d.score_home ?? saved?.score_home ?? null,
-        score_away: d.score_away ?? saved?.score_away ?? null,
-      };
-    });
+        match_id: Number(id),
+        prediction: deriveOutcome(d.score_home!, d.score_away!),
+        score_home: d.score_home!,
+        score_away: d.score_away!,
+      }));
+
+    if (rows.length === 0) {
+      setSaving(false);
+      return;
+    }
 
     const { error } = await supabase
       .from("predictions")
@@ -173,14 +210,18 @@ export function PredictionsList({ matches, predictions, stageLocks, userId, crow
       }
       setSavedPredictions(ns);
       setDrafts({});
+      setEditingIds(new Set());
       setSaveStatus("saved");
       setTimeout(() => setSaveStatus("idle"), 2200);
     }
     setSaving(false);
   }
 
-  const draftCount = Object.keys(drafts).length;
-  const totalSaved = Object.keys(savedPredictions).length;
+  const draftCount = Object.entries(drafts).filter(
+    ([, d]) => d.score_home != null && d.score_away != null
+  ).length;
+  const incompleteDrafts = Object.keys(drafts).length - draftCount;
+  const totalSaved = Object.values(savedPredictions).filter((p) => hasSavedScore(p)).length;
   const totalMatches = matches.length;
   const completePct = ((totalSaved + draftCount) / totalMatches) * 100;
 
@@ -195,7 +236,7 @@ export function PredictionsList({ matches, predictions, stageLocks, userId, crow
         </div>
         <div className="flex-1">
           <div className="flex justify-between mono text-[10px] uppercase tracking-[0.16em] text-muted-warm">
-            <span>Picks complete</span>
+            <span>Scores predicted</span>
             <span>{Math.round(completePct)}%</span>
           </div>
           <div className="h-[3px] bg-paper-deep mt-2">
@@ -210,9 +251,9 @@ export function PredictionsList({ matches, predictions, stageLocks, userId, crow
           const sl = stageLocks[stage];
           const isOpen = sl && sl.predictions_open && !sl.locked;
           const isActive = activeStage === stage;
-          const stageMatchIds = matches.filter((m) => m.stage === stage).map((m) => m.id);
-          const stagePicked = stageMatchIds.filter(
-            (id) => savedPredictions[id] || drafts[id]?.prediction
+          const stageMatchList = matches.filter((m) => m.stage === stage);
+          const stagePicked = stageMatchList.filter(
+            (m) => hasSavedScore(savedPredictions[m.id]) || (drafts[m.id]?.score_home != null && drafts[m.id]?.score_away != null)
           ).length;
           return (
             <button
@@ -231,7 +272,7 @@ export function PredictionsList({ matches, predictions, stageLocks, userId, crow
                   isActive ? "bg-white/18 text-white/85" : "bg-black/[0.06] text-ink"
                 }`}
               >
-                {stagePicked}/{stageMatchIds.length}
+                {stagePicked}/{stageMatchList.length}
               </span>
             </button>
           );
@@ -297,7 +338,7 @@ export function PredictionsList({ matches, predictions, stageLocks, userId, crow
                 <b className="serif italic font-semibold text-[18px] tracking-[-0.01em] text-ink not-italic">
                   <span className="italic">{day.pickedCount}</span>
                 </b>{" "}
-                / {day.matches.length} picked
+                / {day.matches.length} predicted
               </div>
             </div>
 
@@ -316,15 +357,21 @@ export function PredictionsList({ matches, predictions, stageLocks, userId, crow
               const stageNum = getMatchStageNumber(m.match_number, m.stage);
               const homeFallback = getTBDLabel(m.stage, stageNum, "home");
               const awayFallback = getTBDLabel(m.stage, stageNum, "away");
-              const pick = getCurrentPick(m.id);
               const score = getCurrentScore(m.id);
               const draft = isDraft(m.id);
-              const savedAt = savedPredictions[m.id]?.created_at
-                ? format(new Date(savedPredictions[m.id]!.created_at), "d MMM HH:mm")
+              const saved = savedPredictions[m.id];
+              const savedComplete = hasSavedScore(saved);
+              const editing = editingIds.has(m.id);
+              const matchLocked = isMatchLocked(m.kickoff_at);
+              const canPredict = stageOpen && m.home_team_id && m.away_team_id && !matchLocked;
+              const showPicker = canPredict && (!savedComplete || editing || draft);
+              const showSaved = savedComplete && !editing && !draft;
+
+              const home = m.home_team;
+              const away = m.away_team;
+              const savedAt = saved?.created_at
+                ? format(new Date(saved.created_at), "d MMM HH:mm")
                 : null;
-              const canPredict = stageOpen && m.home_team_id && m.away_team_id;
-              const c = crowd[m.id];
-              const showCrowd = !!c && c.total >= MIN_CROWD_SAMPLE;
 
               return (
                 <div
@@ -333,6 +380,7 @@ export function PredictionsList({ matches, predictions, stageLocks, userId, crow
                     draft ? "bg-blue-brand/[0.045] border-b-blue-brand -mx-5 px-5" : "hover:bg-paper-deep/40 hover:-mx-5 hover:px-5"
                   }`}
                 >
+                  {/* Left column: time + stage */}
                   <div className="pt-1">
                     <div className="serif font-semibold text-[28px] leading-none tracking-[-0.025em]">
                       {m.kickoff_at ? format(new Date(m.kickoff_at), "HH").padStart(2, "0") : "--"}
@@ -342,87 +390,92 @@ export function PredictionsList({ matches, predictions, stageLocks, userId, crow
                     <div className="inline-block mt-2 mono text-[9px] px-1.5 py-0.5 bg-paper-deep tracking-[0.1em] uppercase font-semibold">
                       {STAGE_LABELS[m.stage]}
                     </div>
-                    {showCrowd && (
-                      <div className="mt-2 mono text-[9px] text-muted-warm tracking-[0.06em] uppercase">
-                        {c.total} {c.total === 1 ? "pick" : "picks"}
-                      </div>
-                    )}
                   </div>
 
+                  {/* Right column: match + prediction */}
                   <div>
-                    {/* Pick tiles */}
-                    <div className="grid grid-cols-3 gap-2">
-                      <PickTile
-                        team={m.home_team}
-                        fallback={homeFallback}
-                        active={pick === "home"}
-                        draft={draft && pick === "home"}
-                        disabled={!canPredict || saving}
-                        onClick={() => handlePick(m.id, "home")}
-                        crowdLabel="HOME"
-                        crowdPct={showCrowd ? c.home : null}
-                      />
-                      <PickTile
-                        draw
-                        active={pick === "draw"}
-                        draft={draft && pick === "draw"}
-                        disabled={!canPredict || saving}
-                        onClick={() => handlePick(m.id, "draw")}
-                        crowdLabel="DRAW"
-                        crowdPct={showCrowd ? c.draw : null}
-                      />
-                      <PickTile
-                        team={m.away_team}
-                        fallback={awayFallback}
-                        active={pick === "away"}
-                        draft={draft && pick === "away"}
-                        disabled={!canPredict || saving}
-                        onClick={() => handlePick(m.id, "away")}
-                        crowdLabel="AWAY"
-                        crowdPct={showCrowd ? c.away : null}
-                      />
-                    </div>
+                    {/* Match header — teams */}
+                    <MatchHeader
+                      home={home}
+                      away={away}
+                      homeFallback={homeFallback}
+                      awayFallback={awayFallback}
+                    />
 
-                    {/* Score picker */}
-                    {pick && canPredict && m.home_team && m.away_team && (
-                      <ScorePicker
-                        homeCode={m.home_team.short_code}
-                        awayCode={m.away_team.short_code}
-                        scoreH={score.h}
-                        scoreA={score.a}
-                        draft={draft}
-                        onSet={(side, n) => handleScore(m.id, side, n)}
+                    {/* Saved prediction display */}
+                    {showSaved && (
+                      <SavedPrediction
+                        homeCode={home?.short_code ?? homeFallback}
+                        awayCode={away?.short_code ?? awayFallback}
+                        scoreH={saved!.score_home!}
+                        scoreA={saved!.score_away!}
+                        savedAt={savedAt!}
+                        canEdit={!!canPredict}
+                        matchLocked={matchLocked}
+                        onEdit={() => startEditing(m.id)}
                       />
                     )}
 
-                    {/* Foot */}
+                    {/* Score picker — visible when predicting or editing */}
+                    {showPicker && home && away && (
+                      <>
+                        <ScorePicker
+                          homeCode={home.short_code}
+                          awayCode={away.short_code}
+                          scoreH={score.h}
+                          scoreA={score.a}
+                          draft={draft}
+                          onSet={(side, n) => handleScore(m.id, side, n)}
+                        />
+                        {editing && (
+                          <button
+                            onClick={() => cancelEditing(m.id)}
+                            className="mt-2 mono text-[10px] uppercase tracking-[0.12em] text-muted-warm hover:text-ink transition-colors"
+                          >
+                            Cancel edit
+                          </button>
+                        )}
+                      </>
+                    )}
+
+                    {/* Locked message for matches with no prediction */}
+                    {!showSaved && !showPicker && matchLocked && stageOpen && (
+                      <div className="mt-3 flex items-center gap-2 px-3.5 py-3 border border-line-soft bg-paper-deep/50">
+                        <Lock className="w-3.5 h-3.5 text-muted-warm" />
+                        <span className="mono text-[10px] uppercase tracking-[0.12em] text-muted-warm">
+                          Predictions closed — locks 24h before kickoff
+                        </span>
+                      </div>
+                    )}
+
+                    {/* No teams yet */}
+                    {!home && !away && stageOpen && (
+                      <div className="mt-3 mono text-[10px] uppercase tracking-[0.12em] text-muted-warm">
+                        Teams TBD
+                      </div>
+                    )}
+
+                    {/* Footer */}
                     <div className="mt-3 flex justify-between items-center mono text-[10px] uppercase tracking-[0.06em] text-muted-warm">
                       <span>
-                        {draft && <span className="text-blue-brand">● Draft — not saved</span>}
-                        {!draft && savedAt && (
-                          <span className="text-good">✓ Saved · {savedAt}</span>
+                        {draft && score.h != null && score.a != null && (
+                          <span className="text-blue-brand">● Draft — not saved</span>
                         )}
-                        {!draft && !savedAt && !pick && <span>○ No pick yet</span>}
+                        {draft && (score.h == null || score.a == null) && (
+                          <span className="text-blue-brand">Pick scores for both teams</span>
+                        )}
+                        {!draft && !showSaved && !matchLocked && canPredict && (
+                          <span>Predict the score</span>
+                        )}
                       </span>
                       <span>
-                        {pick && (
-                          <>
-                            {score.h != null && score.a != null ? (
-                              <b className="text-ink">+5 if exact · +2 outcome</b>
-                            ) : (
-                              <>
-                                You picked{" "}
-                                <b className="text-ink">
-                                  {pick === "home"
-                                    ? m.home_team?.short_code ?? homeFallback
-                                    : pick === "away"
-                                    ? m.away_team?.short_code ?? awayFallback
-                                    : "Draw"}
-                                </b>{" "}
-                                · +2 PTS
-                              </>
-                            )}
-                          </>
+                        {(draft || showPicker) && score.h != null && score.a != null && (
+                          <b className="text-ink">
+                            {home?.short_code ?? homeFallback} {score.h} – {score.a} {away?.short_code ?? awayFallback}
+                            <span className="text-muted-warm font-normal ml-2">
+                              ({outcomeLabel(deriveOutcome(score.h, score.a))})
+                            </span>
+                          </b>
                         )}
                       </span>
                     </div>
@@ -435,7 +488,7 @@ export function PredictionsList({ matches, predictions, stageLocks, userId, crow
       })()}
 
       {/* Save bar */}
-      {(draftCount > 0 || saveStatus === "saved") && (
+      {(draftCount > 0 || incompleteDrafts > 0 || saveStatus === "saved") && (
         <div className="sticky bottom-3.5 mt-8 bg-ink text-paper px-6 py-4 flex items-center justify-between shadow-[0_12px_32px_-10px_rgba(0,0,0,0.35)] z-10">
           <div>
             {saveStatus === "saved" ? (
@@ -445,10 +498,12 @@ export function PredictionsList({ matches, predictions, stageLocks, userId, crow
             ) : (
               <>
                 <b className="serif font-semibold text-[18px] tracking-[-0.01em]">
-                  {draftCount} unsaved {draftCount === 1 ? "pick" : "picks"}
+                  {draftCount > 0
+                    ? `${draftCount} unsaved ${draftCount === 1 ? "prediction" : "predictions"}`
+                    : `${incompleteDrafts} incomplete — pick both scores`}
                 </b>
                 <small className="block text-paper/60 mono text-[10px] tracking-[0.1em] uppercase mt-1">
-                  {totalSaved}/{totalMatches} saved · ⌘ S to save
+                  {totalSaved}/{totalMatches} saved
                 </small>
               </>
             )}
@@ -471,109 +526,127 @@ export function PredictionsList({ matches, predictions, stageLocks, userId, crow
   );
 }
 
-function PickTile({
-  team,
-  fallback,
-  draw,
-  active,
-  draft,
-  disabled,
-  onClick,
-  crowdLabel,
-  crowdPct,
+/* ── Match Header ───────────────────────────────────────────── */
+function MatchHeader({
+  home,
+  away,
+  homeFallback,
+  awayFallback,
 }: {
-  team?: Team | null;
-  fallback?: string;
-  draw?: boolean;
-  active: boolean;
-  draft: boolean;
-  disabled: boolean;
-  onClick: () => void;
-  crowdLabel: "HOME" | "DRAW" | "AWAY";
-  crowdPct: number | null;
+  home: Team | null;
+  away: Team | null;
+  homeFallback: string;
+  awayFallback: string;
 }) {
   return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      className={`p-3.5 flex flex-col gap-2 border text-left transition-colors ${
-        active
-          ? "bg-ink text-paper border-ink"
-          : draft
-          ? "bg-paper border-blue-brand shadow-[inset_0_0_0_1px_var(--blue)]"
-          : "border-ink hover:bg-paper-deep"
-      } ${disabled ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
-    >
-      <div className="flex items-center gap-2.5">
-        {draw ? (
-          <div className="w-8 h-8 grid place-items-center border border-dashed border-current serif italic text-[22px] font-normal">
-            ×
-          </div>
-        ) : team ? (
-          <div className="w-8 h-8 rounded-full overflow-hidden border border-current/20 shrink-0">
-            <Image
-              src={team.flag_url}
-              alt={team.name}
-              width={32}
-              height={32}
-              className="object-cover w-full h-full"
-            />
+    <div className="flex items-center gap-3 pb-3">
+      {/* Home team */}
+      <div className="flex items-center gap-2.5 flex-1 min-w-0">
+        {home ? (
+          <div className="w-8 h-8 rounded-full overflow-hidden border border-ink/20 shrink-0">
+            <Image src={home.flag_url} alt={home.name} width={32} height={32} className="object-cover w-full h-full" />
           </div>
         ) : (
-          <div className="w-8 h-8 rounded-full bg-current/10 border border-dashed border-current/40" />
+          <div className="w-8 h-8 rounded-full bg-paper-deep border border-dashed border-line shrink-0" />
         )}
         <div className="min-w-0">
-          <div
-            className={`serif font-semibold text-[16px] leading-tight tracking-[-0.015em] truncate ${
-              draw && !active ? "italic font-normal text-muted-warm" : ""
-            }`}
-          >
-            {draw ? "Draw" : team?.name ?? fallback ?? "TBD"}
+          <div className="serif font-semibold text-[16px] leading-tight tracking-[-0.015em] truncate">
+            {home?.name ?? homeFallback}
           </div>
-          <div
-            className={`mono text-[10px] tracking-[0.08em] mt-0.5 ${
-              active ? "text-paper/55" : "text-muted-warm"
-            }`}
-          >
-            {draw ? "DRW" : team?.short_code ?? fallback ?? ""}
+          <div className="mono text-[10px] tracking-[0.08em] text-muted-warm mt-0.5">
+            {home?.short_code ?? homeFallback}
           </div>
         </div>
       </div>
 
-      {crowdPct !== null && (
-        <div className="mt-auto pt-2.5">
-          <div
-            className={`flex justify-between items-baseline mono text-[10px] tracking-[0.04em] ${
-              active ? "text-paper/55" : "text-muted-warm"
-            }`}
-          >
-            <span>{crowdLabel}</span>
-            <b
-              className={`serif italic font-semibold text-[16px] tracking-[-0.01em] ${
-                active ? "text-paper" : "text-ink"
-              }`}
-            >
-              {crowdPct}%
-            </b>
+      {/* vs */}
+      <div className="serif italic text-[18px] text-muted-warm font-normal px-2">vs</div>
+
+      {/* Away team */}
+      <div className="flex items-center gap-2.5 flex-1 min-w-0 justify-end text-right">
+        <div className="min-w-0">
+          <div className="serif font-semibold text-[16px] leading-tight tracking-[-0.015em] truncate">
+            {away?.name ?? awayFallback}
           </div>
-          <div
-            className={`h-[2px] mt-1.5 overflow-hidden ${
-              active ? "bg-paper/18" : "bg-paper-deep"
-            }`}
-          >
-            <div
-              className={`h-full transition-[width] duration-500 ${
-                active ? "bg-blue-bright" : "bg-ink"
-              }`}
-              style={{ width: `${crowdPct}%` }}
-            />
+          <div className="mono text-[10px] tracking-[0.08em] text-muted-warm mt-0.5">
+            {away?.short_code ?? awayFallback}
           </div>
         </div>
-      )}
-    </button>
+        {away ? (
+          <div className="w-8 h-8 rounded-full overflow-hidden border border-ink/20 shrink-0">
+            <Image src={away.flag_url} alt={away.name} width={32} height={32} className="object-cover w-full h-full" />
+          </div>
+        ) : (
+          <div className="w-8 h-8 rounded-full bg-paper-deep border border-dashed border-line shrink-0" />
+        )}
+      </div>
+    </div>
   );
 }
 
+/* ── Saved Prediction Card ──────────────────────────────────── */
+function SavedPrediction({
+  homeCode,
+  awayCode,
+  scoreH,
+  scoreA,
+  savedAt,
+  canEdit,
+  matchLocked,
+  onEdit,
+}: {
+  homeCode: string;
+  awayCode: string;
+  scoreH: number;
+  scoreA: number;
+  savedAt: string;
+  canEdit: boolean;
+  matchLocked: boolean;
+  onEdit: () => void;
+}) {
+  const outcome = deriveOutcome(scoreH, scoreA);
+  return (
+    <div className="border border-good/40 bg-good/[0.06] px-4 py-3.5">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <div className="serif italic font-semibold text-[26px] tracking-[-0.02em] text-ink leading-none">
+            {homeCode}{" "}
+            <span className="text-[30px]">{scoreH}</span>
+            <span className="text-muted-warm mx-1.5 text-[22px] font-normal">–</span>
+            <span className="text-[30px]">{scoreA}</span>
+            {" "}{awayCode}
+          </div>
+          <div className="mono text-[9px] uppercase tracking-[0.14em] px-2 py-1 bg-ink text-paper font-semibold">
+            {outcomeLabel(outcome)}
+          </div>
+        </div>
+
+        {canEdit && !matchLocked ? (
+          <button
+            onClick={onEdit}
+            className="flex items-center gap-1.5 mono text-[10px] uppercase tracking-[0.12em] text-muted-warm hover:text-ink transition-colors"
+          >
+            <Pencil className="w-3.5 h-3.5" />
+            Edit
+          </button>
+        ) : matchLocked ? (
+          <div className="flex items-center gap-1.5 mono text-[9px] uppercase tracking-[0.12em] text-muted-warm">
+            <Lock className="w-3 h-3" />
+            Locked
+          </div>
+        ) : null}
+      </div>
+
+      <div className="mt-2 flex items-center gap-1.5 mono text-[10px] uppercase tracking-[0.06em] text-good">
+        <Check className="w-3.5 h-3.5" />
+        Predicted · {savedAt}
+        <span className="text-muted-warm ml-2">+5 if exact · +2 if result correct</span>
+      </div>
+    </div>
+  );
+}
+
+/* ── Score Picker ───────────────────────────────────────────── */
 function ScorePicker({
   homeCode,
   awayCode,
@@ -592,25 +665,22 @@ function ScorePicker({
   const hasScore = scoreH != null && scoreA != null;
   return (
     <div
-      className={`mt-3.5 px-3.5 py-3 border ${
-        draft ? "border-blue-brand bg-blue-brand/[0.04]" : "border-dashed border-line bg-white/40"
+      className={`mt-3 px-3.5 py-3 border ${
+        draft ? "border-blue-brand bg-blue-brand/[0.04]" : "border-line bg-white/40"
       }`}
     >
       <div className="flex justify-between items-baseline mb-2.5 mono text-[9px] uppercase tracking-[0.18em] text-muted-warm">
         <span>
-          Predict exact score{" "}
-          <span className="text-blue-brand font-bold">+5 PTS</span>
+          Predict the score
         </span>
-        <span className="serif italic font-semibold text-[16px] tracking-[-0.01em] text-ink not-italic">
+        <span>
           {hasScore ? (
-            <span className="italic">
-              {homeCode} {scoreH}
-              <span className="text-muted-warm mx-1.5">–</span>
-              {scoreA} {awayCode}
+            <span className="text-ink font-bold">
+              +5 exact · +2 result
             </span>
           ) : (
-            <span className="mono text-[10px] not-italic text-muted-warm">
-              OPTIONAL · +2 FOR OUTCOME
+            <span>
+              Pick both teams
             </span>
           )}
         </span>

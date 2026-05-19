@@ -1,10 +1,8 @@
 "use client";
 
-import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { format } from "date-fns";
-import { createClient } from "@/lib/supabase/client";
 import { STAGE_LABELS } from "@/lib/constants";
 import type { Match, PredictionChoice, Team } from "@/lib/types";
 
@@ -16,19 +14,14 @@ type EnrichedMatch = Match & {
 interface Props {
   match: EnrichedMatch | null;
   currentPick: PredictionChoice | null;
+  currentScore?: { home: number | null; away: number | null } | null;
   remainingOpen: number;
   totalOpen: number;
   userId: string;
   crowd?: { home: number; draw: number; away: number; total: number } | null;
 }
 
-const MIN_CROWD_SAMPLE = 5;
-
-export function NextPickCard({ match, currentPick, remainingOpen, totalOpen, userId, crowd }: Props) {
-  const [pick, setPick] = useState<PredictionChoice | null>(currentPick);
-  const [saving, setSaving] = useState(false);
-  const supabase = createClient();
-
+export function NextPickCard({ match, currentPick, currentScore, remainingOpen, totalOpen }: Props) {
   if (!match || !match.home_team || !match.away_team) {
     return (
       <div className="border border-ink bg-paper-deep p-6">
@@ -45,28 +38,10 @@ export function NextPickCard({ match, currentPick, remainingOpen, totalOpen, use
     );
   }
 
-  async function handlePick(choice: PredictionChoice) {
-    if (saving) return;
-    setSaving(true);
-    setPick(choice);
-
-    if (currentPick) {
-      await supabase
-        .from("predictions")
-        .update({ prediction: choice })
-        .eq("user_id", userId)
-        .eq("match_id", match!.id);
-    } else {
-      await supabase
-        .from("predictions")
-        .insert({ user_id: userId, match_id: match!.id, prediction: choice });
-    }
-    setSaving(false);
-  }
-
   const stageLabel = STAGE_LABELS[match.stage] ?? match.stage;
   const home = match.home_team;
   const away = match.away_team;
+  const hasScore = currentScore?.home != null && currentScore?.away != null;
 
   return (
     <div className="border border-ink bg-paper-deep p-6">
@@ -74,16 +49,13 @@ export function NextPickCard({ match, currentPick, remainingOpen, totalOpen, use
         <h3 className="serif italic text-[22px] text-ink">Your next pick</h3>
         <span className="mono text-[10px] uppercase tracking-[0.16em] text-blue-brand inline-flex items-center gap-1.5">
           <span className="inline-block w-[6px] h-[6px] rounded-full bg-blue-brand pulse-dot" />
-          {totalOpen - remainingOpen} / {totalOpen} open
+          {totalOpen - remainingOpen} / {totalOpen} predicted
         </span>
       </div>
 
       {/* Matchup */}
       <div className="grid grid-cols-[1fr_auto_1fr] gap-4 items-center pb-4">
-        <Link
-          href="/predictions"
-          className="flex flex-col items-center gap-2.5 text-center transition-transform hover:-translate-y-0.5"
-        >
+        <div className="flex flex-col items-center gap-2.5 text-center">
           <div className="w-14 h-14 rounded-full overflow-hidden border border-ink shadow-[inset_0_0_0_2px_var(--paper-deep)]">
             <Image
               src={home.flag_url}
@@ -99,27 +71,36 @@ export function NextPickCard({ match, currentPick, remainingOpen, totalOpen, use
             </div>
             <div className="mono text-[10px] text-muted-warm tracking-[0.12em] mt-0.5">
               {home.short_code}
-              {match.group_letter && ` · ${match.group_letter}1`}
             </div>
           </div>
-        </Link>
+        </div>
 
         <div className="text-center">
-          <div className="serif italic text-[30px] text-ink leading-none font-normal">
-            vs.
-          </div>
-          <div className="mono text-[10px] uppercase tracking-[0.14em] text-muted-warm mt-1.5">
-            {format(new Date(match.kickoff_at), "EEE · d MMM")}
-          </div>
+          {hasScore ? (
+            <>
+              <div className="serif italic font-semibold text-[30px] text-ink leading-none">
+                {currentScore!.home} – {currentScore!.away}
+              </div>
+              <div className="mono text-[9px] uppercase tracking-[0.14em] text-good font-semibold mt-1.5">
+                Predicted
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="serif italic text-[30px] text-ink leading-none font-normal">
+                vs.
+              </div>
+              <div className="mono text-[10px] uppercase tracking-[0.14em] text-muted-warm mt-1.5">
+                {format(new Date(match.kickoff_at), "EEE · d MMM")}
+              </div>
+            </>
+          )}
           <div className="mono text-[9px] uppercase tracking-[0.14em] text-blue-brand font-semibold mt-1">
             {stageLabel}
           </div>
         </div>
 
-        <Link
-          href="/predictions"
-          className="flex flex-col items-center gap-2.5 text-center transition-transform hover:-translate-y-0.5"
-        >
+        <div className="flex flex-col items-center gap-2.5 text-center">
           <div className="w-14 h-14 rounded-full overflow-hidden border border-ink shadow-[inset_0_0_0_2px_var(--paper-deep)]">
             <Image
               src={away.flag_url}
@@ -137,69 +118,15 @@ export function NextPickCard({ match, currentPick, remainingOpen, totalOpen, use
               {away.short_code}
             </div>
           </div>
-        </Link>
-      </div>
-
-      {/* Pick options */}
-      <div className="grid grid-cols-3 gap-1.5">
-        <PickButton
-          label={home.short_code}
-          active={pick === "home"}
-          disabled={saving}
-          onClick={() => handlePick("home")}
-          crowdPct={crowd && crowd.total >= MIN_CROWD_SAMPLE ? crowd.home : null}
-        />
-        <PickButton
-          label="Draw"
-          active={pick === "draw"}
-          disabled={saving}
-          onClick={() => handlePick("draw")}
-          crowdPct={crowd && crowd.total >= MIN_CROWD_SAMPLE ? crowd.draw : null}
-        />
-        <PickButton
-          label={away.short_code}
-          active={pick === "away"}
-          disabled={saving}
-          onClick={() => handlePick("away")}
-          crowdPct={crowd && crowd.total >= MIN_CROWD_SAMPLE ? crowd.away : null}
-        />
+        </div>
       </div>
 
       <Link
         href="/predictions"
-        className="mt-4 mono text-[10px] uppercase tracking-[0.16em] text-muted-warm hover:text-ink inline-block transition-colors"
+        className="block w-full text-center bg-blue-brand text-white py-3 font-bold text-[12px] tracking-[0.16em] uppercase hover:bg-blue-bright transition-colors"
       >
-        Add exact score for +5 pts &rarr;
+        {hasScore ? "Edit prediction" : "Predict score"} &rarr;
       </Link>
     </div>
-  );
-}
-
-function PickButton({
-  label,
-  active,
-  disabled,
-  onClick,
-  crowdPct,
-}: {
-  label: string;
-  active: boolean;
-  disabled: boolean;
-  onClick: () => void;
-  crowdPct: number | null;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      className={`px-3 py-3 text-left flex flex-col gap-1 border border-ink transition-colors ${
-        active ? "bg-ink text-paper" : "bg-transparent text-ink hover:bg-paper"
-      } ${disabled ? "opacity-60" : ""}`}
-    >
-      <span className="text-[11px] font-bold uppercase tracking-[0.06em]">{label}</span>
-      <span className={`mono text-[10px] ${active ? "text-paper/55" : "text-muted-warm"}`}>
-        {crowdPct !== null ? `${crowdPct}% picked` : "Quick pick"}
-      </span>
-    </button>
   );
 }
