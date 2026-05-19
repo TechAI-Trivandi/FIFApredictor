@@ -111,7 +111,7 @@ export default async function LeaderboardPage() {
 
       {/* Podium */}
       {leaderboard.length >= 1 && (
-        <div className="mt-7 grid grid-cols-3 items-end border border-ink">
+        <div className="mt-7 grid grid-cols-3 items-end gap-[1px]">
           {leaderboard[1] ? (
             <PodiumSeat entry={leaderboard[1]} place={2} isMe={leaderboard[1].user_id === user?.id} />
           ) : (
@@ -128,7 +128,7 @@ export default async function LeaderboardPage() {
 
       {/* Full table — all players */}
       {leaderboard.length > 0 && (
-        <div className="border border-ink border-t-0 bg-paper">
+        <div className="border border-ink mt-5 bg-paper">
           {/* Header */}
           <div className="grid grid-cols-[56px_1fr_72px] sm:grid-cols-[70px_1fr_80px_80px_110px_70px] gap-2 sm:gap-4 px-4 sm:px-5 py-3 mono text-[9px] sm:text-[10px] font-bold tracking-[0.18em] uppercase text-muted-warm border-b border-ink">
             <div>Rank</div>
@@ -140,7 +140,7 @@ export default async function LeaderboardPage() {
           </div>
 
           {/* Rows */}
-          {leaderboard.map((r) => {
+          {leaderboard.map((r, index) => {
             const isMe = r.user_id === user?.id;
             const accuracy =
               r.total_predictions > 0
@@ -150,13 +150,23 @@ export default async function LeaderboardPage() {
             const rankDelta =
               r.previous_rank != null ? r.previous_rank - r.rank : null;
 
+            const medalColor =
+              index === 0 ? "bg-gold"
+              : index === 1 ? "bg-silver"
+              : index === 2 ? "bg-bronze"
+              : null;
+
             return (
               <div
                 key={r.user_id}
-                className={`grid grid-cols-[56px_1fr_72px] sm:grid-cols-[70px_1fr_80px_80px_110px_70px] gap-2 sm:gap-4 items-center px-4 sm:px-5 py-3 sm:py-3.5 border-b border-line last:border-b-0 transition-colors ${
+                className={`relative grid grid-cols-[56px_1fr_72px] sm:grid-cols-[70px_1fr_80px_80px_110px_70px] gap-2 sm:gap-4 items-center px-4 sm:px-5 py-3 sm:py-3.5 border-b border-line last:border-b-0 transition-colors ${
                   isMe ? "bg-blue-brand/[0.06]" : "hover:bg-white/50"
                 }`}
               >
+                {/* Medal accent bar — inset so it doesn't touch horizontal dividers */}
+                {medalColor && (
+                  <div className={`absolute left-0 top-[4px] bottom-[4px] w-[3px] ${medalColor}`} />
+                )}
                 {/* Rank + movement */}
                 <div className="mono font-semibold text-muted-warm flex items-center gap-1">
                   <span className="num text-[13px]">
@@ -265,17 +275,21 @@ function PodiumSeat({
   const avatarBorder =
     place === 1
       ? "border-[3px] border-white"
+      : place === 2
+      ? "border-[3px] border-white"
       : "border-[3px] border-white";
 
   const initialsStyle =
     place === 1
       ? "w-[78px] h-[78px] text-[26px] bg-white/25 text-white border-[3px] border-white"
+      : place === 2
+      ? "w-[62px] h-[62px] text-[20px] bg-white/20 text-white border-[3px] border-white"
       : "w-[62px] h-[62px] text-[20px] bg-white/20 text-white border-[3px] border-white";
 
   const romanMap = { 1: "I", 2: "II", 3: "III" };
 
   return (
-    <div className={`text-center relative overflow-hidden border-r border-ink last:border-r-0 ${styles} ${isMe ? "ring-2 ring-blue-brand ring-inset" : ""}`}>
+    <div className={`text-center relative overflow-hidden ${styles}`}>
       <div className={`serif italic font-normal leading-[0.85] tracking-[-0.05em] ${romanCls}`}>
         {romanMap[place]}
       </div>
@@ -327,7 +341,7 @@ function PodiumSeat({
 function PodiumPlaceholder({ place }: { place: 1 | 2 | 3 }) {
   const romanMap = { 1: "I", 2: "II", 3: "III" };
   return (
-    <div className="text-center py-7 px-6 bg-paper-deep border-r border-ink last:border-r-0">
+    <div className="text-center py-7 px-6 bg-paper-deep">
       <div className="serif italic text-[80px] font-normal leading-[0.85] tracking-[-0.05em] text-line">
         {romanMap[place]}
       </div>

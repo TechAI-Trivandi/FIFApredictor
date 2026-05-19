@@ -210,6 +210,9 @@
 .border-line { border-color: var(--line); }
 .border-line-soft { border-color: var(--line-soft); }
 .border-blue-brand { border-color: var(--blue); }
+.border-gold { border-color: var(--gold); }
+.border-silver { border-color: var(--silver); }
+.border-bronze { border-color: var(--bronze); }
 
 /* Legacy aliases — keep until pages migrate to new names */
 .text-brand-navy { color: var(--navy); }
