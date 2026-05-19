@@ -111,7 +111,7 @@ export default async function LeaderboardPage() {
 
       {/* Podium */}
       {leaderboard.length >= 1 && (
-        <div className="mt-7 grid grid-cols-3 items-end gap-[1px]">
+        <div className="mt-7 grid grid-cols-3 items-end gap-[3px]">
           {leaderboard[1] ? (
             <PodiumSeat entry={leaderboard[1]} place={2} isMe={leaderboard[1].user_id === user?.id} />
           ) : (
@@ -260,10 +260,10 @@ function PodiumSeat({
 
   const styles =
     place === 1
-      ? "bg-gold text-white py-9 px-6"
+      ? "bg-gold text-white py-8 px-6"
       : place === 2
-      ? "bg-silver text-white py-7 px-6"
-      : "bg-bronze text-white py-7 px-6";
+      ? "bg-silver text-white py-10 px-6"
+      : "bg-bronze text-white py-5 px-6";
 
   const romanCls =
     place === 1
