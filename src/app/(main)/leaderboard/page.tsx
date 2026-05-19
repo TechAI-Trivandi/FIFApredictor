@@ -126,8 +126,8 @@ export default async function LeaderboardPage() {
         </div>
       )}
 
-      {/* Full table — places 4+ */}
-      {leaderboard.length > 3 && (
+      {/* Full table — all players */}
+      {leaderboard.length > 0 && (
         <div className="border border-ink border-t-0 bg-paper">
           {/* Header */}
           <div className="grid grid-cols-[56px_1fr_72px] sm:grid-cols-[70px_1fr_80px_80px_110px_70px] gap-2 sm:gap-4 px-4 sm:px-5 py-3 mono text-[9px] sm:text-[10px] font-bold tracking-[0.18em] uppercase text-muted-warm border-b border-ink">
@@ -140,7 +140,7 @@ export default async function LeaderboardPage() {
           </div>
 
           {/* Rows */}
-          {leaderboard.slice(3).map((r) => {
+          {leaderboard.map((r) => {
             const isMe = r.user_id === user?.id;
             const accuracy =
               r.total_predictions > 0
@@ -250,27 +250,27 @@ function PodiumSeat({
 
   const styles =
     place === 1
-      ? "bg-gold text-ink py-9 px-6"
+      ? "bg-gold text-white py-9 px-6"
       : place === 2
       ? "bg-silver text-white py-7 px-6"
       : "bg-bronze text-white py-7 px-6";
 
   const romanCls =
     place === 1
-      ? "text-[120px] text-white/30"
+      ? "text-[120px] text-white"
       : place === 2
-      ? "text-[80px] text-white/30"
-      : "text-[80px] text-white/30";
+      ? "text-[80px] text-white"
+      : "text-[80px] text-white";
 
   const avatarBorder =
     place === 1
-      ? "border-white/40"
-      : "border-white/25";
+      ? "border-[3px] border-white"
+      : "border-[3px] border-white";
 
   const initialsStyle =
     place === 1
-      ? "w-[72px] h-[72px] text-[26px] bg-white/20 text-ink"
-      : "w-14 h-14 text-[20px] bg-white/18 text-white";
+      ? "w-[78px] h-[78px] text-[26px] bg-white/25 text-white border-[3px] border-white"
+      : "w-[62px] h-[62px] text-[20px] bg-white/20 text-white border-[3px] border-white";
 
   const romanMap = { 1: "I", 2: "II", 3: "III" };
 
@@ -280,14 +280,14 @@ function PodiumSeat({
         {romanMap[place]}
       </div>
       {entry.avatar_url ? (
-        <div className={`mx-auto rounded-full overflow-hidden mt-3.5 mb-3 border ${
-          place === 1 ? "w-[72px] h-[72px]" : "w-14 h-14"
-        } ${avatarBorder}`}>
+        <div className={`mx-auto rounded-full overflow-hidden mt-3.5 mb-3 ${avatarBorder} ${
+          place === 1 ? "w-[78px] h-[78px]" : "w-[62px] h-[62px]"
+        }`}>
           <Image
             src={entry.avatar_url}
             alt={entry.display_name}
-            width={place === 1 ? 72 : 56}
-            height={place === 1 ? 72 : 56}
+            width={place === 1 ? 78 : 62}
+            height={place === 1 ? 78 : 62}
             className="object-cover w-full h-full"
           />
         </div>
