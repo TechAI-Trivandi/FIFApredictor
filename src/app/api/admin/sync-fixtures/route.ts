@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-const API_BASE = "https://v3.football.api-sports.io";
+const API_BASE = "https://api.football-data.org/v4";
 
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -27,23 +27,24 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "API key not configured" }, { status: 500 });
   }
 
-  // Fetch World Cup 2026 fixtures (League 1, Season 2026)
-  const res = await fetch(`${API_BASE}/fixtures?league=1&season=2026`, {
-    headers: { "x-apisports-key": apiKey },
+  // Fetch World Cup 2026 fixtures from football-data.org
+  const res = await fetch(`${API_BASE}/competitions/WC/matches?season=2026`, {
+    headers: { "X-Auth-Token": apiKey },
   });
 
-  const apiData = await res.json();
-
-  // Check if API returned an error (e.g. plan restriction)
-  if (apiData.errors && Object.keys(apiData.errors).length > 0) {
+  if (!res.ok) {
+    const errorText = await res.text();
     return NextResponse.json({
-      error: "API returned an error",
-      details: apiData.errors,
-      hint: "Free API-Football plan doesn't include 2026 data. Upgrade to a paid plan, or use manual score entry.",
+      error: "football-data.org request failed",
+      details: errorText,
+      hint: res.status === 429
+        ? "Rate limit exceeded. Free tier allows ~10 requests/minute."
+        : undefined,
     }, { status: 502 });
   }
 
-  const fixtures = apiData.response || [];
+  const apiData = await res.json();
+  const fixtures = apiData.matches || [];
 
   if (fixtures.length === 0) {
     return NextResponse.json({
@@ -54,13 +55,13 @@ export async function POST(request: Request) {
 
   const adminClient = createAdminClient();
 
-  // Get all our teams to map by name
+  // Get all our teams to map by name/code
   const { data: teams } = await adminClient.from("teams").select("id, name, short_code");
   if (!teams) {
     return NextResponse.json({ error: "Failed to load teams" }, { status: 500 });
   }
 
-  // Map of normalized name → team id
+  // Build lookup map: normalized name or code → team id
   const teamByName = new Map<string, number>();
   for (const t of teams) {
     teamByName.set(t.name.toLowerCase().trim(), t.id);
@@ -68,7 +69,9 @@ export async function POST(request: Request) {
   }
 
   // Get all our matches
-  const { data: ourMatches } = await adminClient.from("matches").select("id, home_team_id, away_team_id, kickoff_at, stage");
+  const { data: ourMatches } = await adminClient
+    .from("matches")
+    .select("id, home_team_id, away_team_id, kickoff_at, stage");
   if (!ourMatches) {
     return NextResponse.json({ error: "Failed to load matches" }, { status: 500 });
   }
@@ -77,18 +80,20 @@ export async function POST(request: Request) {
   const unmatched: string[] = [];
 
   for (const fixture of fixtures) {
-    const homeName = fixture.teams?.home?.name?.toLowerCase().trim();
-    const awayName = fixture.teams?.away?.name?.toLowerCase().trim();
-    const fixtureDate = fixture.fixture?.date;
-    const fixtureId = fixture.fixture?.id;
+    const homeName = fixture.homeTeam?.name?.toLowerCase().trim();
+    const homeTla = fixture.homeTeam?.tla?.toLowerCase().trim();
+    const awayName = fixture.awayTeam?.name?.toLowerCase().trim();
+    const awayTla = fixture.awayTeam?.tla?.toLowerCase().trim();
+    const fixtureId = fixture.id;
 
-    if (!fixtureId) continue;
+    if (!fixtureId || !homeName || !awayName) continue;
 
-    const homeTeamId = teamByName.get(homeName);
-    const awayTeamId = teamByName.get(awayName);
+    // Try matching by TLA first (more reliable), then by name
+    const homeTeamId = teamByName.get(homeTla) || teamByName.get(homeName);
+    const awayTeamId = teamByName.get(awayTla) || teamByName.get(awayName);
 
     if (!homeTeamId || !awayTeamId) {
-      unmatched.push(`${fixture.teams?.home?.name} vs ${fixture.teams?.away?.name}`);
+      unmatched.push(`${fixture.homeTeam?.name} vs ${fixture.awayTeam?.name}`);
       continue;
     }
 
@@ -105,7 +110,7 @@ export async function POST(request: Request) {
       .from("matches")
       .update({
         api_fixture_id: fixtureId,
-        kickoff_at: fixtureDate,
+        kickoff_at: fixture.utcDate,
       })
       .eq("id", ourMatch.id);
 

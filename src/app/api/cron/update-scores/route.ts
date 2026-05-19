@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-const API_FOOTBALL_BASE = "https://v3.football.api-sports.io";
+const API_BASE = "https://api.football-data.org/v4";
 
 export async function GET(request: Request) {
   const authHeader = request.headers.get("authorization");
@@ -26,38 +26,39 @@ export async function GET(request: Request) {
     return NextResponse.json({ message: "No matches to update", updated: 0 });
   }
 
-  const fixtureIds = pendingMatches
-    .map((m) => m.api_fixture_id)
-    .filter(Boolean)
-    .join("-");
-
-  const res = await fetch(`${API_FOOTBALL_BASE}/fixtures?ids=${fixtureIds}`, {
-    headers: {
-      "x-apisports-key": apiKey,
-    },
+  // football-data.org: fetch all WC matches and filter locally
+  // (no batch-by-ID endpoint like API-Football)
+  const res = await fetch(`${API_BASE}/competitions/WC/matches?season=2026`, {
+    headers: { "X-Auth-Token": apiKey },
   });
 
   if (!res.ok) {
-    return NextResponse.json({ error: "API-Football request failed" }, { status: 502 });
+    return NextResponse.json({ error: "football-data.org request failed" }, { status: 502 });
   }
 
   const apiData = await res.json();
-  const fixtures = apiData.response || [];
+  const allMatches = apiData.matches || [];
+
+  // Build lookup: football-data.org fixture ID → match data
+  const fixtureMap = new Map<number, typeof allMatches[0]>();
+  for (const m of allMatches) {
+    fixtureMap.set(m.id, m);
+  }
+
   let updatedCount = 0;
 
-  for (const fixture of fixtures) {
-    const fixtureId = fixture.fixture.id;
-    const status = fixture.fixture.status.short;
-    const homeGoals = fixture.goals.home;
-    const awayGoals = fixture.goals.away;
+  for (const match of pendingMatches) {
+    const fixture = fixtureMap.get(match.api_fixture_id);
+    if (!fixture) continue;
 
-    const match = pendingMatches.find((m) => m.api_fixture_id === fixtureId);
-    if (!match) continue;
+    const status = fixture.status; // TIMED, SCHEDULED, IN_PLAY, PAUSED, FINISHED, etc.
+    const homeGoals = fixture.score?.fullTime?.home;
+    const awayGoals = fixture.score?.fullTime?.away;
 
-    if (status === "FT" || status === "AET" || status === "PEN") {
-      let result: string;
-      if (homeGoals > awayGoals) result = "home";
-      else if (awayGoals > homeGoals) result = "away";
+    if (status === "FINISHED") {
+      let result: "home" | "away" | "draw";
+      if (fixture.score.winner === "HOME_TEAM") result = "home";
+      else if (fixture.score.winner === "AWAY_TEAM") result = "away";
       else result = "draw";
 
       await supabase
@@ -72,7 +73,7 @@ export async function GET(request: Request) {
         .eq("id", match.id);
 
       updatedCount++;
-    } else if (["1H", "2H", "HT", "ET", "P"].includes(status)) {
+    } else if (status === "IN_PLAY" || status === "PAUSED") {
       await supabase
         .from("matches")
         .update({ status: "live", updated_at: new Date().toISOString() })

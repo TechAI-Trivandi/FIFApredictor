@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-const API_BASE = "https://v3.football.api-sports.io";
+const API_BASE = "https://api.football-data.org/v4";
 
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -40,37 +40,45 @@ export async function POST(request: Request) {
     });
   }
 
-  const fixtureIds = pendingMatches.map((m) => m.api_fixture_id).filter(Boolean).join("-");
-
-  const res = await fetch(`${API_BASE}/fixtures?ids=${fixtureIds}`, {
-    headers: { "x-apisports-key": apiKey },
+  // Fetch all WC matches and filter locally
+  const res = await fetch(`${API_BASE}/competitions/WC/matches?season=2026`, {
+    headers: { "X-Auth-Token": apiKey },
   });
 
-  const apiData = await res.json();
-
-  if (apiData.errors && Object.keys(apiData.errors).length > 0) {
+  if (!res.ok) {
+    const errorText = await res.text();
     return NextResponse.json({
-      error: "API error",
-      details: apiData.errors,
+      error: "football-data.org request failed",
+      details: errorText,
+      hint: res.status === 429
+        ? "Rate limit exceeded. Free tier allows ~10 requests/minute."
+        : undefined,
     }, { status: 502 });
   }
 
-  const fixtures = apiData.response || [];
+  const apiData = await res.json();
+  const allMatches = apiData.matches || [];
+
+  // Build lookup: football-data.org fixture ID → match data
+  const fixtureMap = new Map<number, typeof allMatches[0]>();
+  for (const m of allMatches) {
+    fixtureMap.set(m.id, m);
+  }
+
   let updatedCount = 0;
 
-  for (const fixture of fixtures) {
-    const fixtureId = fixture.fixture.id;
-    const status = fixture.fixture.status.short;
-    const homeGoals = fixture.goals.home;
-    const awayGoals = fixture.goals.away;
+  for (const match of pendingMatches) {
+    const fixture = fixtureMap.get(match.api_fixture_id);
+    if (!fixture) continue;
 
-    const match = pendingMatches.find((m) => m.api_fixture_id === fixtureId);
-    if (!match) continue;
+    const status = fixture.status;
+    const homeGoals = fixture.score?.fullTime?.home;
+    const awayGoals = fixture.score?.fullTime?.away;
 
-    if (["FT", "AET", "PEN"].includes(status)) {
+    if (status === "FINISHED") {
       let result: "home" | "away" | "draw";
-      if (homeGoals > awayGoals) result = "home";
-      else if (awayGoals > homeGoals) result = "away";
+      if (fixture.score.winner === "HOME_TEAM") result = "home";
+      else if (fixture.score.winner === "AWAY_TEAM") result = "away";
       else result = "draw";
 
       await adminClient
@@ -85,7 +93,7 @@ export async function POST(request: Request) {
         .eq("id", match.id);
 
       updatedCount++;
-    } else if (["1H", "2H", "HT", "ET", "P"].includes(status)) {
+    } else if (status === "IN_PLAY" || status === "PAUSED") {
       await adminClient
         .from("matches")
         .update({ status: "live", updated_at: new Date().toISOString() })
