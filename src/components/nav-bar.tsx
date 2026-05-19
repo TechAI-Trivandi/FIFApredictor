@@ -6,7 +6,8 @@ import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type { Profile, LeaderboardEntry } from "@/lib/types";
 import { useEffect, useState } from "react";
-import { LogOut } from "lucide-react";
+import { LogOut, Camera } from "lucide-react";
+import { AvatarUpload } from "@/components/leaderboard/avatar-upload";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard" },
@@ -20,6 +21,7 @@ export function NavBar({ profile }: { profile: Profile }) {
   const router = useRouter();
   const supabase = createClient();
   const [me, setMe] = useState<LeaderboardEntry | null>(null);
+  const [showProfile, setShowProfile] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -128,28 +130,75 @@ export function NavBar({ profile }: { profile: Profile }) {
               </span>
             )}
           </div>
-          {profile.avatar_url ? (
-            <div className="w-[30px] h-[30px] rounded-full overflow-hidden border border-ink">
-              <Image
-                src={profile.avatar_url}
-                alt={profile.display_name}
-                width={30}
-                height={30}
-                className="object-cover w-full h-full"
-              />
-            </div>
-          ) : (
-            <div className="w-[30px] h-[30px] rounded-full bg-ink text-paper grid place-items-center font-bold text-[13px]">
-              {initial}
-            </div>
-          )}
-          <button
-            onClick={handleLogout}
-            className="text-muted-warm hover:text-ink transition-colors p-1"
-            title="Sign out"
-          >
-            <LogOut className="h-4 w-4" />
-          </button>
+          <div className="relative">
+            <button
+              onClick={() => setShowProfile(!showProfile)}
+              className="cursor-pointer group"
+              title="Profile settings"
+            >
+              {profile.avatar_url ? (
+                <div className="w-[30px] h-[30px] rounded-full overflow-hidden border border-ink group-hover:ring-2 group-hover:ring-blue-brand transition-all">
+                  <Image
+                    src={profile.avatar_url}
+                    alt={profile.display_name}
+                    width={30}
+                    height={30}
+                    className="object-cover w-full h-full"
+                  />
+                </div>
+              ) : (
+                <div className="w-[30px] h-[30px] rounded-full bg-ink text-paper grid place-items-center font-bold text-[13px] group-hover:ring-2 group-hover:ring-blue-brand transition-all">
+                  {initial}
+                </div>
+              )}
+            </button>
+
+            {showProfile && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setShowProfile(false)} />
+                <div className="absolute right-0 top-10 z-50 w-64 bg-paper border border-line shadow-lg p-4 space-y-4">
+                  <div className="flex items-center gap-3">
+                    {profile.avatar_url ? (
+                      <div className="w-12 h-12 rounded-full overflow-hidden border border-ink flex-shrink-0">
+                        <Image
+                          src={profile.avatar_url}
+                          alt={profile.display_name}
+                          width={48}
+                          height={48}
+                          className="object-cover w-full h-full"
+                        />
+                      </div>
+                    ) : (
+                      <div className="w-12 h-12 rounded-full bg-ink text-paper grid place-items-center font-bold text-lg flex-shrink-0">
+                        {initial}
+                      </div>
+                    )}
+                    <div className="min-w-0">
+                      <p className="font-semibold text-sm text-ink truncate">{profile.display_name}</p>
+                      <p className="text-[11px] text-muted-warm truncate">{profile.email}</p>
+                    </div>
+                  </div>
+
+                  <div>
+                    <p className="mono text-[9px] font-bold uppercase tracking-[0.18em] text-muted-warm mb-2">
+                      Profile photo
+                    </p>
+                    <AvatarUpload userId={profile.id} currentUrl={profile.avatar_url} />
+                  </div>
+
+                  <div className="border-t border-line pt-3">
+                    <button
+                      onClick={handleLogout}
+                      className="flex items-center gap-2 text-sm text-muted-warm hover:text-ink transition-colors w-full"
+                    >
+                      <LogOut className="h-3.5 w-3.5" />
+                      Sign out
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
