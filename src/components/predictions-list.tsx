@@ -120,11 +120,18 @@ export function PredictionsList({ matches, predictions, stageLocks, userId, crow
       const next = { ...prev };
       const cur = next[matchId] ?? {};
       const saved = savedPredictions[matchId];
-      next[matchId] = {
-        prediction: cur.prediction ?? saved?.prediction,
-        score_home: side === "h" ? n : cur.score_home ?? saved?.score_home ?? null,
-        score_away: side === "a" ? n : cur.score_away ?? saved?.score_away ?? null,
-      };
+      const newHome = side === "h" ? n : cur.score_home ?? saved?.score_home ?? null;
+      const newAway = side === "a" ? n : cur.score_away ?? saved?.score_away ?? null;
+
+      // Auto-derive outcome from exact score so they never contradict
+      let prediction: PredictionChoice | undefined = cur.prediction ?? saved?.prediction;
+      if (newHome != null && newAway != null) {
+        if (newHome > newAway) prediction = "home";
+        else if (newAway > newHome) prediction = "away";
+        else prediction = "draw";
+      }
+
+      next[matchId] = { prediction, score_home: newHome, score_away: newAway };
       return next;
     });
   }
