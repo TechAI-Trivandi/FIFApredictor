@@ -19,7 +19,8 @@ const STAGE_PILL_LABELS: Record<string, string> = {
   final: "Final",
 };
 
-export function MatchesView({ matches }: { matches: EnrichedMatch[] }) {
+export function MatchesView({ matches, predictedMatchIds = [] }: { matches: EnrichedMatch[]; predictedMatchIds?: number[] }) {
+  const predictedSet = useMemo(() => new Set(predictedMatchIds), [predictedMatchIds]);
   const [view, setView] = useState<"List" | "Bracket" | "Calendar">("List");
   const [scope, setScope] = useState<"All" | "My picks">("All");
   const [stage, setStage] = useState<string>("group");
@@ -97,10 +98,10 @@ export function MatchesView({ matches }: { matches: EnrichedMatch[] }) {
       )}
 
       {view === "List" && stage === "group" && (
-        <GroupListView matches={matches} scope={scope} />
+        <GroupListView matches={matches} scope={scope} predictedSet={predictedSet} />
       )}
       {view === "List" && stage !== "group" && (
-        <KnockoutListView matches={matches.filter((m) => m.stage === stage)} scope={scope} stage={stage} />
+        <KnockoutListView matches={matches.filter((m) => m.stage === stage)} scope={scope} stage={stage} predictedSet={predictedSet} />
       )}
       {view === "Bracket" && <BracketGridView matches={matches} />}
       {view === "Calendar" && <CalendarView matches={matches} />}
@@ -137,18 +138,30 @@ function Segment({
   );
 }
 
-function GroupListView({ matches, scope }: { matches: EnrichedMatch[]; scope: "All" | "My picks" }) {
+function GroupListView({ matches, scope, predictedSet }: { matches: EnrichedMatch[]; scope: "All" | "My picks"; predictedSet: Set<number> }) {
   const groups = Array.from(
     new Set(
       matches.filter((m) => m.stage === "group" && m.group_letter).map((m) => m.group_letter as string)
     )
   ).sort();
 
+  const visibleGroups = scope === "My picks"
+    ? groups.filter((letter) => matches.some((m) => m.stage === "group" && m.group_letter === letter && predictedSet.has(m.id)))
+    : groups;
+
+  if (visibleGroups.length === 0) {
+    return (
+      <div className="mt-12 text-center serif italic text-muted-warm text-[20px]">
+        No predictions yet for the group stage.
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-7 pt-7">
-      {groups.map((letter) => {
+      {visibleGroups.map((letter) => {
         const groupMatches = matches.filter((m) => m.stage === "group" && m.group_letter === letter);
-        return <GroupBlock key={letter} letter={letter} matches={groupMatches} scope={scope} />;
+        return <GroupBlock key={letter} letter={letter} matches={groupMatches} scope={scope} predictedSet={predictedSet} />;
       })}
     </div>
   );
@@ -158,10 +171,12 @@ function GroupBlock({
   letter,
   matches,
   scope,
+  predictedSet,
 }: {
   letter: string;
   matches: EnrichedMatch[];
   scope: "All" | "My picks";
+  predictedSet: Set<number>;
 }) {
   // Collect teams + their stats from finished matches
   const teamStats = new Map<
@@ -199,7 +214,7 @@ function GroupBlock({
   );
 
   const playedCount = matches.filter((m) => m.status === "finished").length;
-  const visibleMatches = scope === "My picks" ? matches : matches;
+  const visibleMatches = scope === "My picks" ? matches.filter((m) => predictedSet.has(m.id)) : matches;
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-6 items-start min-w-0">
@@ -270,15 +285,19 @@ function KnockoutListView({
   matches,
   scope,
   stage,
+  predictedSet,
 }: {
   matches: EnrichedMatch[];
   scope: "All" | "My picks";
   stage: string;
+  predictedSet: Set<number>;
 }) {
-  if (matches.length === 0) {
+  const visible = scope === "My picks" ? matches.filter((m) => predictedSet.has(m.id)) : matches;
+
+  if (visible.length === 0) {
     return (
       <div className="mt-12 text-center serif italic text-muted-warm text-[20px]">
-        No matches scheduled in this stage yet.
+        {scope === "My picks" ? "No predictions yet for this stage." : "No matches scheduled in this stage yet."}
       </div>
     );
   }
@@ -290,11 +309,11 @@ function KnockoutListView({
           {STAGE_LABELS[stage]}
         </h2>
         <span className="mono text-[10px] uppercase tracking-[0.12em] text-muted-warm">
-          {matches.length} {matches.length === 1 ? "match" : "matches"}
+          {visible.length} {visible.length === 1 ? "match" : "matches"}
         </span>
       </div>
       <div>
-        {matches.map((m) => (
+        {visible.map((m) => (
           <MatchLine key={m.id} match={m} />
         ))}
       </div>

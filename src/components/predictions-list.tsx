@@ -51,6 +51,7 @@ function hasSavedScore(p: Prediction | undefined): boolean {
 }
 
 export function PredictionsList({ matches, predictions, stageLocks, userId, crowd }: Props) {
+  const [tab, setTab] = useState<"predict" | "my">("predict");
   const [savedPredictions, setSavedPredictions] = useState(predictions);
   const [drafts, setDrafts] = useState<Record<number, DraftEntry>>({});
   const [editingIds, setEditingIds] = useState<Set<number>>(new Set());
@@ -225,8 +226,58 @@ export function PredictionsList({ matches, predictions, stageLocks, userId, crow
   const totalMatches = matches.length;
   const completePct = ((totalSaved + draftCount) / totalMatches) * 100;
 
+  // My Predictions: build summary data
+  const myPredictions = matches
+    .filter((m) => hasSavedScore(savedPredictions[m.id]))
+    .map((m) => ({
+      match: m,
+      prediction: savedPredictions[m.id]!,
+    }))
+    .sort((a, b) => new Date(a.match.kickoff_at).getTime() - new Date(b.match.kickoff_at).getTime());
+
+  const myTotalPoints = myPredictions.reduce((sum, p) => sum + p.prediction.points_awarded, 0);
+  const myCorrect = myPredictions.filter((p) => p.prediction.points_awarded > 0).length;
+  const myFinished = myPredictions.filter((p) => p.match.status === "finished").length;
+
   return (
     <div className="pb-32">
+      {/* Tab toggle */}
+      <div className="flex gap-0 border border-ink mt-4 mb-2 w-fit">
+        <button
+          onClick={() => setTab("predict")}
+          className={`px-5 py-2.5 mono text-[10px] font-bold tracking-[0.18em] uppercase transition-colors border-r border-ink ${
+            tab === "predict" ? "bg-ink text-paper" : "bg-transparent text-muted-warm hover:bg-paper-deep hover:text-ink"
+          }`}
+        >
+          Predict
+        </button>
+        <button
+          onClick={() => setTab("my")}
+          className={`px-5 py-2.5 mono text-[10px] font-bold tracking-[0.18em] uppercase transition-colors ${
+            tab === "my" ? "bg-ink text-paper" : "bg-transparent text-muted-warm hover:bg-paper-deep hover:text-ink"
+          }`}
+        >
+          My predictions
+          {totalSaved > 0 && (
+            <span className={`ml-2 mono text-[9px] px-1.5 py-px ${tab === "my" ? "bg-white/18 text-white/85" : "bg-paper-deep text-ink"}`}>
+              {totalSaved}
+            </span>
+          )}
+        </button>
+      </div>
+
+      {/* ═══ MY PREDICTIONS TAB ═══ */}
+      {tab === "my" && (
+        <MyPredictionsView
+          predictions={myPredictions}
+          totalPoints={myTotalPoints}
+          correctCount={myCorrect}
+          finishedCount={myFinished}
+        />
+      )}
+
+      {/* ═══ PREDICT TAB ═══ */}
+      {tab === "predict" && <>
       {/* Pred progress + stage tabs */}
       <div className="flex items-center gap-6 py-3.5">
         <div className="serif italic font-semibold text-[56px] leading-none tracking-[-0.04em] num text-ink">
@@ -394,19 +445,53 @@ export function PredictionsList({ matches, predictions, stageLocks, userId, crow
 
                   {/* Right column: match + prediction */}
                   <div>
-                    {/* Match header — teams */}
-                    <MatchHeader
-                      home={home}
-                      away={away}
-                      homeFallback={homeFallback}
-                      awayFallback={awayFallback}
-                    />
+                    {/* Editable: teams with inline score steppers */}
+                    {showPicker && home && away && (
+                      <div>
+                        <MatchRowEditable
+                          home={home}
+                          away={away}
+                          scoreH={score.h}
+                          scoreA={score.a}
+                          onScore={(side, n) => handleScore(m.id, side, n)}
+                        />
+                        <div className="mt-2.5 flex justify-between items-center mono text-[10px] uppercase tracking-[0.06em] text-muted-warm">
+                          <span>
+                            {draft && score.h != null && score.a != null && (
+                              <span className="text-blue-brand">● Not saved</span>
+                            )}
+                            {(!draft || score.h == null || score.a == null) && (
+                              <span>+5 exact score · +2 correct result</span>
+                            )}
+                          </span>
+                          <span className="flex items-center gap-3">
+                            {score.h != null && score.a != null && (
+                              <span className="text-ink font-bold">
+                                {outcomeLabel(deriveOutcome(score.h, score.a))}
+                              </span>
+                            )}
+                            {editing && (
+                              <button
+                                onClick={() => cancelEditing(m.id)}
+                                className="text-muted-warm hover:text-ink transition-colors"
+                              >
+                                Cancel
+                              </button>
+                            )}
+                          </span>
+                        </div>
+                      </div>
+                    )}
 
                     {/* Saved prediction display */}
                     {showSaved && (
                       <SavedPrediction
                         homeCode={home?.short_code ?? homeFallback}
                         awayCode={away?.short_code ?? awayFallback}
+                        homeFlag={home?.flag_url}
+                        awayFlag={away?.flag_url}
+                        homeName={home?.name ?? homeFallback}
+                        awayName={away?.name ?? awayFallback}
                         scoreH={saved!.score_home!}
                         scoreA={saved!.score_away!}
                         savedAt={savedAt!}
@@ -416,69 +501,28 @@ export function PredictionsList({ matches, predictions, stageLocks, userId, crow
                       />
                     )}
 
-                    {/* Score picker — visible when predicting or editing */}
-                    {showPicker && home && away && (
-                      <>
-                        <ScorePicker
-                          homeCode={home.short_code}
-                          awayCode={away.short_code}
-                          scoreH={score.h}
-                          scoreA={score.a}
-                          draft={draft}
-                          onSet={(side, n) => handleScore(m.id, side, n)}
+                    {/* Non-editable: just team names (locked or TBD) */}
+                    {!showPicker && !showSaved && (
+                      <div>
+                        <MatchRowStatic
+                          home={home}
+                          away={away}
+                          homeFallback={homeFallback}
+                          awayFallback={awayFallback}
                         />
-                        {editing && (
-                          <button
-                            onClick={() => cancelEditing(m.id)}
-                            className="mt-2 mono text-[10px] uppercase tracking-[0.12em] text-muted-warm hover:text-ink transition-colors"
-                          >
-                            Cancel edit
-                          </button>
+                        {matchLocked && stageOpen && (
+                          <div className="mt-2 flex items-center gap-1.5 mono text-[10px] uppercase tracking-[0.12em] text-muted-warm">
+                            <Lock className="w-3 h-3" />
+                            Locked — 24h before kickoff
+                          </div>
                         )}
-                      </>
-                    )}
-
-                    {/* Locked message for matches with no prediction */}
-                    {!showSaved && !showPicker && matchLocked && stageOpen && (
-                      <div className="mt-3 flex items-center gap-2 px-3.5 py-3 border border-line-soft bg-paper-deep/50">
-                        <Lock className="w-3.5 h-3.5 text-muted-warm" />
-                        <span className="mono text-[10px] uppercase tracking-[0.12em] text-muted-warm">
-                          Predictions closed — locks 24h before kickoff
-                        </span>
+                        {!home && !away && stageOpen && (
+                          <div className="mt-2 mono text-[10px] uppercase tracking-[0.12em] text-muted-warm">
+                            Teams TBD
+                          </div>
+                        )}
                       </div>
                     )}
-
-                    {/* No teams yet */}
-                    {!home && !away && stageOpen && (
-                      <div className="mt-3 mono text-[10px] uppercase tracking-[0.12em] text-muted-warm">
-                        Teams TBD
-                      </div>
-                    )}
-
-                    {/* Footer */}
-                    <div className="mt-3 flex justify-between items-center mono text-[10px] uppercase tracking-[0.06em] text-muted-warm">
-                      <span>
-                        {draft && score.h != null && score.a != null && (
-                          <span className="text-blue-brand">● Draft — not saved</span>
-                        )}
-                        {draft && (score.h == null || score.a == null) && (
-                          <span className="text-blue-brand">Pick scores for both teams</span>
-                        )}
-                        {!draft && !showSaved && !matchLocked && canPredict && (
-                          <span>Predict the score</span>
-                        )}
-                      </span>
-                      <span>
-                        {(draft || showPicker) && score.h != null && score.a != null && (
-                          <b className="text-ink">
-                            {home?.short_code ?? homeFallback} {score.h} – {score.a} {away?.short_code ?? awayFallback}
-                            <span className="text-muted-warm font-normal ml-2">
-                              ({outcomeLabel(deriveOutcome(score.h, score.a))})
-                            </span>
-                          </b>
-                        )}
-                      </span>
-                    </div>
                   </div>
                 </div>
               );
@@ -522,12 +566,262 @@ export function PredictionsList({ matches, predictions, stageLocks, userId, crow
           )}
         </div>
       )}
+      </>}
     </div>
   );
 }
 
-/* ── Match Header ───────────────────────────────────────────── */
-function MatchHeader({
+/* ── My Predictions View ────────────────────────────────────── */
+function MyPredictionsView({
+  predictions,
+  totalPoints,
+  correctCount,
+  finishedCount,
+}: {
+  predictions: { match: EnrichedMatch; prediction: Prediction }[];
+  totalPoints: number;
+  correctCount: number;
+  finishedCount: number;
+}) {
+  if (predictions.length === 0) {
+    return (
+      <div className="mt-12 text-center">
+        <div className="serif italic text-[22px] text-muted-warm">No predictions yet.</div>
+        <p className="mono text-[11px] uppercase tracking-[0.12em] text-muted-warm mt-3">
+          Head to the Predict tab to start picking scores.
+        </p>
+      </div>
+    );
+  }
+
+  const accuracy = finishedCount > 0 ? Math.round((correctCount / finishedCount) * 100) : null;
+
+  // Group by stage
+  const byStage: Record<string, { match: EnrichedMatch; prediction: Prediction }[]> = {};
+  for (const p of predictions) {
+    const stage = p.match.stage;
+    if (!byStage[stage]) byStage[stage] = [];
+    byStage[stage].push(p);
+  }
+
+  return (
+    <div className="pt-5">
+      {/* Summary stats */}
+      <div className="grid grid-cols-3 gap-3 mb-6">
+        <div className="border border-ink p-4">
+          <div className="mono text-[9px] font-bold tracking-[0.18em] uppercase text-muted-warm">Total points</div>
+          <div className="serif font-semibold text-[36px] leading-none tracking-[-0.03em] mt-2">{totalPoints}</div>
+        </div>
+        <div className="border border-ink p-4">
+          <div className="mono text-[9px] font-bold tracking-[0.18em] uppercase text-muted-warm">Accuracy</div>
+          <div className="serif font-semibold text-[36px] leading-none tracking-[-0.03em] mt-2">
+            {accuracy !== null ? `${accuracy}%` : "–"}
+          </div>
+          {finishedCount > 0 && (
+            <div className="mono text-[10px] text-muted-warm mt-1">{correctCount}/{finishedCount} correct</div>
+          )}
+        </div>
+        <div className="border border-ink p-4">
+          <div className="mono text-[9px] font-bold tracking-[0.18em] uppercase text-muted-warm">Predictions</div>
+          <div className="serif font-semibold text-[36px] leading-none tracking-[-0.03em] mt-2">{predictions.length}</div>
+        </div>
+      </div>
+
+      {/* Predictions by stage */}
+      {STAGE_ORDER.filter((s) => byStage[s]).map((stage) => (
+        <div key={stage} className="mb-6">
+          <div className="flex items-baseline justify-between border-b border-ink pb-2 mb-3">
+            <h3 className="serif font-semibold text-[22px] tracking-[-0.02em]">{STAGE_LABELS[stage]}</h3>
+            <span className="mono text-[10px] uppercase tracking-[0.12em] text-muted-warm">
+              {byStage[stage].length} {byStage[stage].length === 1 ? "prediction" : "predictions"}
+            </span>
+          </div>
+          <div className="space-y-1.5">
+            {byStage[stage].map(({ match: m, prediction: p }) => {
+              const home = m.home_team;
+              const away = m.away_team;
+              const finished = m.status === "finished";
+              const correct = p.points_awarded > 0;
+              const exact = p.points_awarded === 5;
+
+              return (
+                <div
+                  key={m.id}
+                  className={`flex items-center gap-3 px-4 py-3 border ${
+                    finished
+                      ? correct
+                        ? "border-good/40 bg-good/[0.05]"
+                        : "border-bad/30 bg-bad/[0.04]"
+                      : "border-line"
+                  }`}
+                >
+                  {/* Date */}
+                  <div className="mono text-[10px] text-muted-warm tracking-[0.06em] w-[60px] shrink-0">
+                    {format(new Date(m.kickoff_at), "d MMM")}
+                  </div>
+
+                  {/* Teams + predicted score */}
+                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                    {home && <TeamFlag team={home} size={24} />}
+                    <span className="mono text-[10px] font-bold tracking-[0.06em] w-[32px]">{home?.short_code ?? "TBD"}</span>
+                    <span className="serif font-semibold text-[18px] tracking-[-0.02em] text-ink w-[24px] text-center">
+                      {p.score_home}
+                    </span>
+                    <span className="text-muted-warm text-[14px]">–</span>
+                    <span className="serif font-semibold text-[18px] tracking-[-0.02em] text-ink w-[24px] text-center">
+                      {p.score_away}
+                    </span>
+                    <span className="mono text-[10px] font-bold tracking-[0.06em] w-[32px] text-right">{away?.short_code ?? "TBD"}</span>
+                    {away && <TeamFlag team={away} size={24} />}
+                  </div>
+
+                  {/* Actual result (if finished) */}
+                  {finished && m.home_score != null && m.away_score != null && (
+                    <div className="mono text-[10px] tracking-[0.06em] text-muted-warm shrink-0 text-right w-[70px]">
+                      Actual: {m.home_score}–{m.away_score}
+                    </div>
+                  )}
+
+                  {/* Points badge */}
+                  <div className="shrink-0 w-[52px] text-right">
+                    {finished ? (
+                      <span
+                        className={`inline-block mono text-[9px] font-bold tracking-[0.1em] uppercase px-2 py-1 ${
+                          exact
+                            ? "bg-good text-white"
+                            : correct
+                            ? "bg-good/20 text-good"
+                            : "bg-bad/15 text-bad"
+                        }`}
+                      >
+                        {exact ? "+5" : correct ? "+2" : "0"}
+                      </span>
+                    ) : (
+                      <span className="mono text-[9px] tracking-[0.1em] uppercase text-muted-warm">
+                        Pending
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ── Team Flag ───────────────────────────────────────────────── */
+function TeamFlag({ team, size = 32 }: { team: Team | null; size?: number }) {
+  if (!team) return <div className="w-8 h-8 rounded-full bg-paper-deep border border-dashed border-line shrink-0" />;
+  return (
+    <div className="rounded-full overflow-hidden border border-ink/20 shrink-0" style={{ width: size, height: size }}>
+      <Image src={team.flag_url} alt={team.name} width={size} height={size} className="object-cover w-full h-full" />
+    </div>
+  );
+}
+
+/* ── Score Stepper ([-] [input] [+]) ────────────────────────── */
+function ScoreStepper({
+  value,
+  onChange,
+}: {
+  value: number | null;
+  onChange: (n: number) => void;
+}) {
+  const current = value ?? 0;
+  return (
+    <div className="flex items-center">
+      <button
+        type="button"
+        onClick={() => onChange(Math.max(0, current - 1))}
+        className="w-8 h-10 border border-line hover:bg-paper-deep flex items-center justify-center text-[16px] text-muted-warm hover:text-ink transition-colors select-none"
+      >
+        −
+      </button>
+      <input
+        type="number"
+        min={0}
+        value={value != null ? value : ""}
+        placeholder="–"
+        onChange={(e) => {
+          const v = parseInt(e.target.value);
+          onChange(isNaN(v) ? 0 : Math.max(0, v));
+        }}
+        className="w-12 h-10 border-y border-line bg-transparent text-center serif font-semibold text-[20px] tracking-[-0.02em] text-ink focus:outline-none focus:border-blue-brand [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+      />
+      <button
+        type="button"
+        onClick={() => onChange(current + 1)}
+        className="w-8 h-10 border border-line hover:bg-paper-deep flex items-center justify-center text-[16px] text-muted-warm hover:text-ink transition-colors select-none"
+      >
+        +
+      </button>
+    </div>
+  );
+}
+
+/* ── Editable Match Row (teams + score steppers) ────────────── */
+function MatchRowEditable({
+  home,
+  away,
+  scoreH,
+  scoreA,
+  onScore,
+}: {
+  home: Team;
+  away: Team;
+  scoreH: number | null;
+  scoreA: number | null;
+  onScore: (side: "h" | "a", n: number) => void;
+}) {
+  return (
+    <div className="flex items-center gap-3">
+      {/* Home side */}
+      <div className="flex items-center gap-2.5 flex-1 min-w-0">
+        <TeamFlag team={home} />
+        <div className="min-w-0 hidden sm:block">
+          <div className="serif font-semibold text-[15px] leading-tight tracking-[-0.015em] truncate">
+            {home.name}
+          </div>
+          <div className="mono text-[9px] tracking-[0.08em] text-muted-warm mt-0.5">
+            {home.short_code}
+          </div>
+        </div>
+        <div className="min-w-0 sm:hidden">
+          <div className="mono text-[10px] font-bold tracking-[0.06em]">{home.short_code}</div>
+        </div>
+      </div>
+
+      {/* Score area */}
+      <div className="flex items-center gap-2 shrink-0">
+        <ScoreStepper value={scoreH} onChange={(n) => onScore("h", n)} />
+        <span className="serif text-[18px] text-muted-warm font-normal mx-0.5">–</span>
+        <ScoreStepper value={scoreA} onChange={(n) => onScore("a", n)} />
+      </div>
+
+      {/* Away side */}
+      <div className="flex items-center gap-2.5 flex-1 min-w-0 justify-end">
+        <div className="min-w-0 text-right hidden sm:block">
+          <div className="serif font-semibold text-[15px] leading-tight tracking-[-0.015em] truncate">
+            {away.name}
+          </div>
+          <div className="mono text-[9px] tracking-[0.08em] text-muted-warm mt-0.5">
+            {away.short_code}
+          </div>
+        </div>
+        <div className="min-w-0 text-right sm:hidden">
+          <div className="mono text-[10px] font-bold tracking-[0.06em]">{away.short_code}</div>
+        </div>
+        <TeamFlag team={away} />
+      </div>
+    </div>
+  );
+}
+
+/* ── Static Match Row (read-only, no steppers) ──────────────── */
+function MatchRowStatic({
   home,
   away,
   homeFallback,
@@ -539,46 +833,29 @@ function MatchHeader({
   awayFallback: string;
 }) {
   return (
-    <div className="flex items-center gap-3 pb-3">
-      {/* Home team */}
+    <div className="flex items-center gap-3">
       <div className="flex items-center gap-2.5 flex-1 min-w-0">
-        {home ? (
-          <div className="w-8 h-8 rounded-full overflow-hidden border border-ink/20 shrink-0">
-            <Image src={home.flag_url} alt={home.name} width={32} height={32} className="object-cover w-full h-full" />
-          </div>
-        ) : (
-          <div className="w-8 h-8 rounded-full bg-paper-deep border border-dashed border-line shrink-0" />
-        )}
+        <TeamFlag team={home} />
         <div className="min-w-0">
-          <div className="serif font-semibold text-[16px] leading-tight tracking-[-0.015em] truncate">
+          <div className="serif font-semibold text-[15px] leading-tight tracking-[-0.015em] truncate">
             {home?.name ?? homeFallback}
           </div>
-          <div className="mono text-[10px] tracking-[0.08em] text-muted-warm mt-0.5">
+          <div className="mono text-[9px] tracking-[0.08em] text-muted-warm mt-0.5">
             {home?.short_code ?? homeFallback}
           </div>
         </div>
       </div>
-
-      {/* vs */}
       <div className="serif italic text-[18px] text-muted-warm font-normal px-2">vs</div>
-
-      {/* Away team */}
       <div className="flex items-center gap-2.5 flex-1 min-w-0 justify-end text-right">
         <div className="min-w-0">
-          <div className="serif font-semibold text-[16px] leading-tight tracking-[-0.015em] truncate">
+          <div className="serif font-semibold text-[15px] leading-tight tracking-[-0.015em] truncate">
             {away?.name ?? awayFallback}
           </div>
-          <div className="mono text-[10px] tracking-[0.08em] text-muted-warm mt-0.5">
+          <div className="mono text-[9px] tracking-[0.08em] text-muted-warm mt-0.5">
             {away?.short_code ?? awayFallback}
           </div>
         </div>
-        {away ? (
-          <div className="w-8 h-8 rounded-full overflow-hidden border border-ink/20 shrink-0">
-            <Image src={away.flag_url} alt={away.name} width={32} height={32} className="object-cover w-full h-full" />
-          </div>
-        ) : (
-          <div className="w-8 h-8 rounded-full bg-paper-deep border border-dashed border-line shrink-0" />
-        )}
+        <TeamFlag team={away} />
       </div>
     </div>
   );
@@ -588,6 +865,10 @@ function MatchHeader({
 function SavedPrediction({
   homeCode,
   awayCode,
+  homeFlag,
+  awayFlag,
+  homeName,
+  awayName,
   scoreH,
   scoreA,
   savedAt,
@@ -597,6 +878,10 @@ function SavedPrediction({
 }: {
   homeCode: string;
   awayCode: string;
+  homeFlag?: string | null;
+  awayFlag?: string | null;
+  homeName: string;
+  awayName: string;
   scoreH: number;
   scoreA: number;
   savedAt: string;
@@ -607,20 +892,42 @@ function SavedPrediction({
   const outcome = deriveOutcome(scoreH, scoreA);
   return (
     <div className="border border-good/40 bg-good/[0.06] px-4 py-3.5">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <div className="serif italic font-semibold text-[26px] tracking-[-0.02em] text-ink leading-none">
-            {homeCode}{" "}
-            <span className="text-[30px]">{scoreH}</span>
-            <span className="text-muted-warm mx-1.5 text-[22px] font-normal">–</span>
-            <span className="text-[30px]">{scoreA}</span>
-            {" "}{awayCode}
-          </div>
-          <div className="mono text-[9px] uppercase tracking-[0.14em] px-2 py-1 bg-ink text-paper font-semibold">
-            {outcomeLabel(outcome)}
-          </div>
+      {/* Score row */}
+      <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 flex-1 min-w-0">
+          {homeFlag && (
+            <div className="w-7 h-7 rounded-full overflow-hidden border border-ink/20 shrink-0">
+              <Image src={homeFlag} alt={homeName} width={28} height={28} className="object-cover w-full h-full" />
+            </div>
+          )}
+          <span className="mono text-[10px] font-bold tracking-[0.06em]">{homeCode}</span>
         </div>
 
+        <div className="flex items-center gap-2 shrink-0">
+          <span className="serif font-semibold text-[28px] tracking-[-0.02em] text-ink leading-none">{scoreH}</span>
+          <span className="serif text-[20px] text-muted-warm font-normal">–</span>
+          <span className="serif font-semibold text-[28px] tracking-[-0.02em] text-ink leading-none">{scoreA}</span>
+        </div>
+
+        <div className="flex items-center gap-2 flex-1 min-w-0 justify-end">
+          <span className="mono text-[10px] font-bold tracking-[0.06em]">{awayCode}</span>
+          {awayFlag && (
+            <div className="w-7 h-7 rounded-full overflow-hidden border border-ink/20 shrink-0">
+              <Image src={awayFlag} alt={awayName} width={28} height={28} className="object-cover w-full h-full" />
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Footer */}
+      <div className="mt-2.5 flex items-center justify-between">
+        <div className="flex items-center gap-2 mono text-[10px] uppercase tracking-[0.06em] text-good">
+          <Check className="w-3.5 h-3.5" />
+          Predicted · {savedAt}
+          <span className="mono text-[9px] px-1.5 py-0.5 bg-ink text-paper font-semibold tracking-[0.1em]">
+            {outcomeLabel(outcome)}
+          </span>
+        </div>
         {canEdit && !matchLocked ? (
           <button
             onClick={onEdit}
@@ -636,81 +943,6 @@ function SavedPrediction({
           </div>
         ) : null}
       </div>
-
-      <div className="mt-2 flex items-center gap-1.5 mono text-[10px] uppercase tracking-[0.06em] text-good">
-        <Check className="w-3.5 h-3.5" />
-        Predicted · {savedAt}
-        <span className="text-muted-warm ml-2">+5 if exact · +2 if result correct</span>
-      </div>
-    </div>
-  );
-}
-
-/* ── Score Picker ───────────────────────────────────────────── */
-function ScorePicker({
-  homeCode,
-  awayCode,
-  scoreH,
-  scoreA,
-  draft,
-  onSet,
-}: {
-  homeCode: string;
-  awayCode: string;
-  scoreH: number | null;
-  scoreA: number | null;
-  draft: boolean;
-  onSet: (side: "h" | "a", n: number) => void;
-}) {
-  const hasScore = scoreH != null && scoreA != null;
-  return (
-    <div
-      className={`mt-3 px-3.5 py-3 border ${
-        draft ? "border-blue-brand bg-blue-brand/[0.04]" : "border-line bg-white/40"
-      }`}
-    >
-      <div className="flex justify-between items-baseline mb-2.5 mono text-[9px] uppercase tracking-[0.18em] text-muted-warm">
-        <span>
-          Predict the score
-        </span>
-        <span>
-          {hasScore ? (
-            <span className="text-ink font-bold">
-              +5 exact · +2 result
-            </span>
-          ) : (
-            <span>
-              Pick both teams
-            </span>
-          )}
-        </span>
-      </div>
-      {(["h", "a"] as const).map((side) => {
-        const code = side === "h" ? homeCode : awayCode;
-        const value = side === "h" ? scoreH : scoreA;
-        return (
-          <div key={side} className="grid grid-cols-[70px_1fr] gap-2.5 items-center mb-1.5 last:mb-0">
-            <span className="mono text-[10px] tracking-[0.1em] font-semibold text-muted-warm">
-              {code}
-            </span>
-            <div className="grid grid-cols-7 gap-1">
-              {[0, 1, 2, 3, 4, 5, 6].map((n) => (
-                <button
-                  key={n}
-                  onClick={() => onSet(side, n)}
-                  className={`py-1.5 border serif font-semibold text-[14px] tracking-[-0.01em] transition-colors ${
-                    value === n
-                      ? "bg-ink text-paper border-ink"
-                      : "border-line hover:bg-paper-deep"
-                  }`}
-                >
-                  {n === 6 ? "6+" : n}
-                </button>
-              ))}
-            </div>
-          </div>
-        );
-      })}
     </div>
   );
 }

@@ -88,7 +88,7 @@ export default async function PredictionsPage() {
         </div>
         <div className="lg:text-right pb-3">
           <p className="serif italic text-[18px] text-muted-warm leading-snug max-w-[320px] lg:ml-auto">
-            Pick the outcome for +2 pts, nail the exact score for +5.
+            Predict the score — +5 pts for exact, +2 for correct result.
           </p>
           <div className="mono text-[10px] uppercase tracking-[0.16em] text-muted-warm mt-3.5">
             {format(TOURNAMENT_START, "d MMM").toUpperCase()} — 19 JUL · 104 MATCHES
