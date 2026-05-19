@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
 import { format } from "date-fns";
@@ -51,6 +52,8 @@ function hasSavedScore(p: Prediction | undefined): boolean {
 }
 
 export function PredictionsList({ matches, predictions, stageLocks, userId, crowd }: Props) {
+  const router = useRouter();
+  const [, startTransition] = useTransition();
   const [tab, setTab] = useState<"predict" | "my">("predict");
   const [savedPredictions, setSavedPredictions] = useState(predictions);
   const [drafts, setDrafts] = useState<Record<number, DraftEntry>>({});
@@ -58,6 +61,12 @@ export function PredictionsList({ matches, predictions, stageLocks, userId, crow
   const [saving, setSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saved">("idle");
   const supabase = createClient();
+
+  // Sync server data into client state when the page re-renders with fresh props
+  // (e.g. after router.refresh() or navigation)
+  useEffect(() => {
+    setSavedPredictions(predictions);
+  }, [predictions]);
 
   // Stages that have matches
   const stages = STAGE_ORDER.filter((s) => matches.some((m) => m.stage === s));
@@ -195,7 +204,7 @@ export function PredictionsList({ matches, predictions, stageLocks, userId, crow
       .upsert(rows, { onConflict: "user_id,match_id" });
 
     if (!error) {
-      // Re-fetch predictions from server to get updated points_awarded
+      // Re-fetch predictions client-side for immediate UI update
       // (the DB trigger scores immediately if the match is already finished)
       const { data: freshPredictions } = await supabase
         .from("predictions")
@@ -211,6 +220,11 @@ export function PredictionsList({ matches, predictions, stageLocks, userId, crow
       setEditingIds(new Set());
       setSaveStatus("saved");
       setTimeout(() => setSaveStatus("idle"), 2200);
+
+      // Also refresh the server component data (crowd stats, match statuses, etc.)
+      startTransition(() => {
+        router.refresh();
+      });
     }
     setSaving(false);
   }
@@ -307,7 +321,7 @@ export function PredictionsList({ matches, predictions, stageLocks, userId, crow
             <button
               key={stage}
               onClick={() => setActiveStage(stage)}
-              className={`flex-1 min-w-[120px] px-4 py-3.5 text-[11px] font-bold uppercase tracking-[0.18em] border-r border-line last:border-r-0 inline-flex items-center justify-center gap-2 ${
+              className={`flex-1 min-w-[90px] sm:min-w-[120px] px-3 sm:px-4 py-3 sm:py-3.5 text-[10px] sm:text-[11px] font-bold uppercase tracking-[0.14em] sm:tracking-[0.18em] border-r border-line last:border-r-0 inline-flex items-center justify-center gap-1.5 sm:gap-2 ${
                 isActive ? "bg-ink text-paper" : "bg-transparent text-muted-warm hover:bg-paper-deep hover:text-ink"
               }`}
             >
@@ -424,12 +438,23 @@ export function PredictionsList({ matches, predictions, stageLocks, userId, crow
               return (
                 <div
                   key={m.id}
-                  className={`grid grid-cols-[90px_1fr] gap-7 py-5 border-b border-line transition-colors ${
+                  className={`py-5 border-b border-line transition-colors ${
                     draft ? "bg-blue-brand/[0.045] border-b-blue-brand -mx-5 px-5" : "hover:bg-paper-deep/40 hover:-mx-5 hover:px-5"
                   }`}
                 >
-                  {/* Left column: time + stage */}
-                  <div className="pt-1">
+                  {/* Mobile: inline time + stage */}
+                  <div className="sm:hidden flex items-center gap-2.5 mb-3">
+                    <span className="serif font-semibold text-[20px] leading-none tracking-[-0.025em]">
+                      {m.kickoff_at ? format(new Date(m.kickoff_at), "HH:mm") : "--:--"}
+                    </span>
+                    <span className="mono text-[9px] px-1.5 py-0.5 bg-paper-deep tracking-[0.1em] uppercase font-semibold">
+                      {STAGE_LABELS[m.stage]}
+                    </span>
+                  </div>
+
+                  <div className="sm:grid sm:grid-cols-[90px_1fr] sm:gap-7">
+                  {/* Left column: time + stage (desktop only) */}
+                  <div className="hidden sm:block pt-1">
                     <div className="serif font-semibold text-[28px] leading-none tracking-[-0.025em]">
                       {m.kickoff_at ? format(new Date(m.kickoff_at), "HH").padStart(2, "0") : "--"}
                       <i className="font-normal text-blue-brand">:</i>
@@ -521,6 +546,7 @@ export function PredictionsList({ matches, predictions, stageLocks, userId, crow
                       </div>
                     )}
                   </div>
+                  </div>{/* close sm:grid */}
                 </div>
               );
             })}
@@ -530,20 +556,20 @@ export function PredictionsList({ matches, predictions, stageLocks, userId, crow
 
       {/* Save bar */}
       {(draftCount > 0 || incompleteDrafts > 0 || saveStatus === "saved") && (
-        <div className="sticky bottom-3.5 mt-8 bg-ink text-paper px-6 py-4 flex items-center justify-between shadow-[0_12px_32px_-10px_rgba(0,0,0,0.35)] z-10">
-          <div>
+        <div className="sticky bottom-3.5 mt-8 bg-ink text-paper px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between gap-3 shadow-[0_12px_32px_-10px_rgba(0,0,0,0.35)] z-10">
+          <div className="min-w-0">
             {saveStatus === "saved" ? (
-              <span className="serif font-semibold text-[18px] tracking-[-0.01em] inline-flex items-center gap-2">
-                <Check className="w-4 h-4" /> Predictions saved
+              <span className="serif font-semibold text-[15px] sm:text-[18px] tracking-[-0.01em] inline-flex items-center gap-2">
+                <Check className="w-4 h-4 shrink-0" /> Saved
               </span>
             ) : (
               <>
-                <b className="serif font-semibold text-[18px] tracking-[-0.01em]">
+                <b className="serif font-semibold text-[14px] sm:text-[18px] tracking-[-0.01em]">
                   {draftCount > 0
-                    ? `${draftCount} unsaved ${draftCount === 1 ? "prediction" : "predictions"}`
-                    : `${incompleteDrafts} incomplete — pick both scores`}
+                    ? `${draftCount} unsaved`
+                    : `${incompleteDrafts} incomplete`}
                 </b>
-                <small className="block text-paper/60 mono text-[10px] tracking-[0.1em] uppercase mt-1">
+                <small className="block text-paper/60 mono text-[10px] tracking-[0.1em] uppercase mt-0.5 sm:mt-1">
                   {totalSaved}/{totalMatches} saved
                 </small>
               </>
@@ -553,11 +579,11 @@ export function PredictionsList({ matches, predictions, stageLocks, userId, crow
             <button
               onClick={savePredictions}
               disabled={saving}
-              className="bg-blue-brand text-white border-0 px-6 py-3 font-bold text-[12px] tracking-[0.16em] uppercase hover:bg-blue-bright transition-colors disabled:opacity-60"
+              className="bg-blue-brand text-white border-0 px-4 sm:px-6 py-2.5 sm:py-3 font-bold text-[11px] sm:text-[12px] tracking-[0.16em] uppercase hover:bg-blue-bright transition-colors disabled:opacity-60 shrink-0"
             >
-              <span className="inline-flex items-center gap-2">
-                <Save className="w-4 h-4" />
-                {saving ? "Saving..." : "Save predictions"}
+              <span className="inline-flex items-center gap-1.5 sm:gap-2">
+                <Save className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                {saving ? "Saving..." : "Save"}
               </span>
             </button>
           )}
@@ -604,23 +630,23 @@ function MyPredictionsView({
   return (
     <div className="pt-5">
       {/* Summary stats */}
-      <div className="grid grid-cols-3 gap-3 mb-6">
-        <div className="border border-ink p-4">
-          <div className="mono text-[9px] font-bold tracking-[0.18em] uppercase text-muted-warm">Total points</div>
-          <div className="serif font-semibold text-[36px] leading-none tracking-[-0.03em] mt-2">{totalPoints}</div>
+      <div className="grid grid-cols-3 gap-2 sm:gap-3 mb-6">
+        <div className="border border-ink p-3 sm:p-4">
+          <div className="mono text-[8px] sm:text-[9px] font-bold tracking-[0.14em] sm:tracking-[0.18em] uppercase text-muted-warm">Points</div>
+          <div className="serif font-semibold text-[28px] sm:text-[36px] leading-none tracking-[-0.03em] mt-1.5 sm:mt-2">{totalPoints}</div>
         </div>
-        <div className="border border-ink p-4">
-          <div className="mono text-[9px] font-bold tracking-[0.18em] uppercase text-muted-warm">Accuracy</div>
-          <div className="serif font-semibold text-[36px] leading-none tracking-[-0.03em] mt-2">
+        <div className="border border-ink p-3 sm:p-4">
+          <div className="mono text-[8px] sm:text-[9px] font-bold tracking-[0.14em] sm:tracking-[0.18em] uppercase text-muted-warm">Accuracy</div>
+          <div className="serif font-semibold text-[28px] sm:text-[36px] leading-none tracking-[-0.03em] mt-1.5 sm:mt-2">
             {accuracy !== null ? `${accuracy}%` : "–"}
           </div>
           {finishedCount > 0 && (
-            <div className="mono text-[10px] text-muted-warm mt-1">{correctCount}/{finishedCount} correct</div>
+            <div className="mono text-[9px] sm:text-[10px] text-muted-warm mt-1">{correctCount}/{finishedCount}</div>
           )}
         </div>
-        <div className="border border-ink p-4">
-          <div className="mono text-[9px] font-bold tracking-[0.18em] uppercase text-muted-warm">Predictions</div>
-          <div className="serif font-semibold text-[36px] leading-none tracking-[-0.03em] mt-2">{predictions.length}</div>
+        <div className="border border-ink p-3 sm:p-4">
+          <div className="mono text-[8px] sm:text-[9px] font-bold tracking-[0.14em] sm:tracking-[0.18em] uppercase text-muted-warm">Picks</div>
+          <div className="serif font-semibold text-[28px] sm:text-[36px] leading-none tracking-[-0.03em] mt-1.5 sm:mt-2">{predictions.length}</div>
         </div>
       </div>
 
@@ -644,7 +670,7 @@ function MyPredictionsView({
               return (
                 <div
                   key={m.id}
-                  className={`flex items-center gap-3 px-4 py-3 border ${
+                  className={`px-3 sm:px-4 py-3 border ${
                     finished
                       ? correct
                         ? "border-good/40 bg-good/[0.05]"
@@ -652,35 +678,37 @@ function MyPredictionsView({
                       : "border-line"
                   }`}
                 >
+                  {/* Main row */}
+                  <div className="flex items-center gap-2 sm:gap-3">
                   {/* Date */}
-                  <div className="mono text-[10px] text-muted-warm tracking-[0.06em] w-[60px] shrink-0">
+                  <div className="mono text-[10px] text-muted-warm tracking-[0.06em] w-[44px] sm:w-[60px] shrink-0">
                     {format(new Date(m.kickoff_at), "d MMM")}
                   </div>
 
                   {/* Teams + predicted score */}
-                  <div className="flex items-center gap-2 flex-1 min-w-0">
-                    {home && <TeamFlag team={home} size={24} />}
-                    <span className="mono text-[10px] font-bold tracking-[0.06em] w-[32px]">{home?.short_code ?? "TBD"}</span>
-                    <span className="serif font-semibold text-[18px] tracking-[-0.02em] text-ink w-[24px] text-center">
+                  <div className="flex items-center gap-1.5 sm:gap-2 flex-1 min-w-0">
+                    {home && <TeamFlag team={home} size={20} />}
+                    <span className="mono text-[10px] font-bold tracking-[0.06em] w-[28px] sm:w-[32px]">{home?.short_code ?? "TBD"}</span>
+                    <span className="serif font-semibold text-[16px] sm:text-[18px] tracking-[-0.02em] text-ink w-[20px] sm:w-[24px] text-center">
                       {p.score_home}
                     </span>
-                    <span className="text-muted-warm text-[14px]">–</span>
-                    <span className="serif font-semibold text-[18px] tracking-[-0.02em] text-ink w-[24px] text-center">
+                    <span className="text-muted-warm text-[12px] sm:text-[14px]">–</span>
+                    <span className="serif font-semibold text-[16px] sm:text-[18px] tracking-[-0.02em] text-ink w-[20px] sm:w-[24px] text-center">
                       {p.score_away}
                     </span>
-                    <span className="mono text-[10px] font-bold tracking-[0.06em] w-[32px] text-right">{away?.short_code ?? "TBD"}</span>
-                    {away && <TeamFlag team={away} size={24} />}
+                    <span className="mono text-[10px] font-bold tracking-[0.06em] w-[28px] sm:w-[32px] text-right">{away?.short_code ?? "TBD"}</span>
+                    {away && <TeamFlag team={away} size={20} />}
                   </div>
 
-                  {/* Actual result (if finished) */}
+                  {/* Actual result — desktop only inline */}
                   {finished && m.home_score != null && m.away_score != null && (
-                    <div className="mono text-[10px] tracking-[0.06em] text-muted-warm shrink-0 text-right w-[70px]">
+                    <div className="hidden sm:block mono text-[10px] tracking-[0.06em] text-muted-warm shrink-0 text-right w-[70px]">
                       Actual: {m.home_score}–{m.away_score}
                     </div>
                   )}
 
                   {/* Points badge */}
-                  <div className="shrink-0 w-[52px] text-right">
+                  <div className="shrink-0 w-[36px] sm:w-[52px] text-right">
                     {finished ? (
                       <span
                         className={`inline-block mono text-[9px] font-bold tracking-[0.1em] uppercase px-2 py-1 ${
@@ -699,6 +727,14 @@ function MyPredictionsView({
                       </span>
                     )}
                   </div>
+                  </div>{/* close main row */}
+
+                  {/* Actual result — mobile only, below main row */}
+                  {finished && m.home_score != null && m.away_score != null && (
+                    <div className="sm:hidden mono text-[9px] tracking-[0.06em] text-muted-warm mt-1.5 pl-[46px]">
+                      Actual: {m.home_score}–{m.away_score}
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -723,35 +759,45 @@ function TeamFlag({ team, size = 32 }: { team: Team | null; size?: number }) {
 function ScoreStepper({
   value,
   onChange,
+  compact = false,
 }: {
   value: number | null;
   onChange: (n: number) => void;
+  compact?: boolean;
 }) {
   const current = value ?? 0;
+  const btnCls = compact
+    ? "w-8 h-10 border border-line hover:bg-paper-deep flex items-center justify-center text-[16px] text-muted-warm hover:text-ink transition-colors select-none"
+    : "w-8 h-10 border border-line hover:bg-paper-deep flex items-center justify-center text-[16px] text-muted-warm hover:text-ink transition-colors select-none";
+  const inputCls = compact
+    ? "w-11 h-10 border-y border-line bg-transparent text-center serif font-semibold text-[18px] tracking-[-0.02em] text-ink focus:outline-none focus:border-blue-brand [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+    : "w-12 h-10 border-y border-line bg-transparent text-center serif font-semibold text-[20px] tracking-[-0.02em] text-ink focus:outline-none focus:border-blue-brand [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none";
   return (
     <div className="flex items-center">
       <button
         type="button"
         onClick={() => onChange(Math.max(0, current - 1))}
-        className="w-8 h-10 border border-line hover:bg-paper-deep flex items-center justify-center text-[16px] text-muted-warm hover:text-ink transition-colors select-none"
+        className={btnCls}
       >
         −
       </button>
       <input
         type="number"
         min={0}
+        inputMode="numeric"
+        pattern="[0-9]*"
         value={value != null ? value : ""}
         placeholder="–"
         onChange={(e) => {
           const v = parseInt(e.target.value);
           onChange(isNaN(v) ? 0 : Math.max(0, v));
         }}
-        className="w-12 h-10 border-y border-line bg-transparent text-center serif font-semibold text-[20px] tracking-[-0.02em] text-ink focus:outline-none focus:border-blue-brand [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+        className={inputCls}
       />
       <button
         type="button"
         onClick={() => onChange(current + 1)}
-        className="w-8 h-10 border border-line hover:bg-paper-deep flex items-center justify-center text-[16px] text-muted-warm hover:text-ink transition-colors select-none"
+        className={btnCls}
       >
         +
       </button>
@@ -774,46 +820,58 @@ function MatchRowEditable({
   onScore: (side: "h" | "a", n: number) => void;
 }) {
   return (
-    <div className="flex items-center gap-3">
-      {/* Home side */}
-      <div className="flex items-center gap-2.5 flex-1 min-w-0">
-        <TeamFlag team={home} />
-        <div className="min-w-0 hidden sm:block">
-          <div className="serif font-semibold text-[15px] leading-tight tracking-[-0.015em] truncate">
-            {home.name}
-          </div>
-          <div className="mono text-[9px] tracking-[0.08em] text-muted-warm mt-0.5">
-            {home.short_code}
+    <>
+      {/* ── Desktop: single row ── */}
+      <div className="hidden sm:flex items-center gap-3">
+        <div className="flex items-center gap-2.5 flex-1 min-w-0">
+          <TeamFlag team={home} />
+          <div className="min-w-0">
+            <div className="serif font-semibold text-[15px] leading-tight tracking-[-0.015em] truncate">
+              {home.name}
+            </div>
+            <div className="mono text-[9px] tracking-[0.08em] text-muted-warm mt-0.5">
+              {home.short_code}
+            </div>
           </div>
         </div>
-        <div className="min-w-0 sm:hidden">
-          <div className="mono text-[10px] font-bold tracking-[0.06em]">{home.short_code}</div>
+        <div className="flex items-center gap-2 shrink-0">
+          <ScoreStepper value={scoreH} onChange={(n) => onScore("h", n)} />
+          <span className="serif text-[18px] text-muted-warm font-normal mx-0.5">–</span>
+          <ScoreStepper value={scoreA} onChange={(n) => onScore("a", n)} />
+        </div>
+        <div className="flex items-center gap-2.5 flex-1 min-w-0 justify-end">
+          <div className="min-w-0 text-right">
+            <div className="serif font-semibold text-[15px] leading-tight tracking-[-0.015em] truncate">
+              {away.name}
+            </div>
+            <div className="mono text-[9px] tracking-[0.08em] text-muted-warm mt-0.5">
+              {away.short_code}
+            </div>
+          </div>
+          <TeamFlag team={away} />
         </div>
       </div>
 
-      {/* Score area */}
-      <div className="flex items-center gap-2 shrink-0">
-        <ScoreStepper value={scoreH} onChange={(n) => onScore("h", n)} />
-        <span className="serif text-[18px] text-muted-warm font-normal mx-0.5">–</span>
-        <ScoreStepper value={scoreA} onChange={(n) => onScore("a", n)} />
-      </div>
-
-      {/* Away side */}
-      <div className="flex items-center gap-2.5 flex-1 min-w-0 justify-end">
-        <div className="min-w-0 text-right hidden sm:block">
-          <div className="serif font-semibold text-[15px] leading-tight tracking-[-0.015em] truncate">
-            {away.name}
+      {/* ── Mobile: teams on top, score steppers below ── */}
+      <div className="sm:hidden">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <TeamFlag team={home} size={24} />
+            <span className="mono text-[11px] font-bold tracking-[0.06em]">{home.short_code}</span>
           </div>
-          <div className="mono text-[9px] tracking-[0.08em] text-muted-warm mt-0.5">
-            {away.short_code}
+          <span className="serif italic text-[14px] text-muted-warm">vs</span>
+          <div className="flex items-center gap-2">
+            <span className="mono text-[11px] font-bold tracking-[0.06em]">{away.short_code}</span>
+            <TeamFlag team={away} size={24} />
           </div>
         </div>
-        <div className="min-w-0 text-right sm:hidden">
-          <div className="mono text-[10px] font-bold tracking-[0.06em]">{away.short_code}</div>
+        <div className="flex items-center justify-center gap-2">
+          <ScoreStepper value={scoreH} onChange={(n) => onScore("h", n)} compact />
+          <span className="serif text-[18px] text-muted-warm font-normal">–</span>
+          <ScoreStepper value={scoreA} onChange={(n) => onScore("a", n)} compact />
         </div>
-        <TeamFlag team={away} />
       </div>
-    </div>
+    </>
   );
 }
 
@@ -917,10 +975,11 @@ function SavedPrediction({
       </div>
 
       {/* Footer */}
-      <div className="mt-2.5 flex items-center justify-between">
+      <div className="mt-2.5 flex flex-wrap items-center justify-between gap-y-2">
         <div className="flex items-center gap-2 mono text-[10px] uppercase tracking-[0.06em] text-good">
-          <Check className="w-3.5 h-3.5" />
-          Predicted · {savedAt}
+          <Check className="w-3.5 h-3.5 shrink-0" />
+          <span className="hidden sm:inline">Predicted · {savedAt}</span>
+          <span className="sm:hidden">Saved</span>
           <span className="mono text-[9px] px-1.5 py-0.5 bg-ink text-paper font-semibold tracking-[0.1em]">
             {outcomeLabel(outcome)}
           </span>
