@@ -175,9 +175,10 @@ export default function AdminPage() {
               onClick={async () => {
                 if (!confirm("Are you sure? This will delete ALL predictions from ALL users.")) return;
                 setSyncing("clearing");
-                const { error } = await supabase.from("predictions").delete().neq("id", 0);
-                if (error) {
-                  setSyncStatus(`Failed to clear: ${error.message}`);
+                const res = await fetch("/api/admin/clear-predictions", { method: "POST" });
+                const data = await res.json();
+                if (!res.ok) {
+                  setSyncStatus(`Failed to clear: ${data.error}`);
                 } else {
                   setSyncStatus("All predictions cleared.");
                 }
