@@ -6,25 +6,55 @@ import type { LeaderboardEntry } from "@/lib/types";
 
 interface LeaderboardRow extends LeaderboardEntry {
   avatar_url: string | null;
+  form: number[]; // last 5 scored predictions: 0 | 2 | 5
 }
 
 export default async function LeaderboardPage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
-  // Pull leaderboard joined with avatar_url from profiles
+  // Pull leaderboard
   const { data: lbRaw } = await supabase
     .from("leaderboard")
-    .select("user_id, display_name, total_points, correct_predictions, total_predictions, rank")
+    .select("user_id, display_name, total_points, correct_predictions, total_predictions, rank, previous_rank, weekly_points")
     .order("rank", { ascending: true });
 
+  // Avatars
   const userIds = (lbRaw ?? []).map((r) => r.user_id);
   const { data: profilesData } = await supabase
     .from("profiles")
     .select("id, avatar_url")
     .in("id", userIds.length > 0 ? userIds : ["00000000-0000-0000-0000-000000000000"]);
-
   const avatarById = new Map((profilesData ?? []).map((p) => [p.id, p.avatar_url]));
+
+  // Form data: last 5 scored predictions per user
+  const { data: finishedMatches } = await supabase
+    .from("matches")
+    .select("id, kickoff_at")
+    .eq("status", "finished")
+    .order("kickoff_at", { ascending: false });
+
+  const finishedIds = new Set((finishedMatches ?? []).map((m) => m.id));
+  const finishedOrder = (finishedMatches ?? []).map((m) => m.id);
+
+  const { data: allPreds } = await supabase
+    .from("predictions")
+    .select("user_id, match_id, points_awarded");
+
+  // Group predictions by user, sorted by most-recent match first
+  const formMap: Record<string, number[]> = {};
+  const predsByUser: Record<string, { match_id: number; points: number }[]> = {};
+  for (const p of allPreds ?? []) {
+    if (!finishedIds.has(p.match_id)) continue;
+    if (!predsByUser[p.user_id]) predsByUser[p.user_id] = [];
+    predsByUser[p.user_id].push({ match_id: p.match_id, points: p.points_awarded });
+  }
+  for (const [uid, preds] of Object.entries(predsByUser)) {
+    preds.sort(
+      (a, b) => finishedOrder.indexOf(a.match_id) - finishedOrder.indexOf(b.match_id)
+    );
+    formMap[uid] = preds.slice(0, 5).map((p) => p.points);
+  }
 
   const leaderboard: LeaderboardRow[] = (lbRaw ?? []).map((r) => ({
     user_id: r.user_id,
@@ -33,7 +63,10 @@ export default async function LeaderboardPage() {
     correct_predictions: r.correct_predictions,
     total_predictions: r.total_predictions,
     rank: r.rank,
+    previous_rank: r.previous_rank ?? null,
+    weekly_points: r.weekly_points ?? 0,
     avatar_url: avatarById.get(r.user_id) ?? null,
+    form: formMap[r.user_id] ?? [],
     updated_at: "",
   }));
 
@@ -93,16 +126,20 @@ export default async function LeaderboardPage() {
         </div>
       )}
 
-      {/* Table — places 4+ */}
+      {/* Full table — places 4+ */}
       {leaderboard.length > 3 && (
         <div className="border border-ink border-t-0 bg-paper">
-          <div className="grid grid-cols-[60px_1fr_100px_140px_70px] sm:grid-cols-[70px_1fr_100px_140px_70px] gap-4 px-5 py-3 mono text-[10px] font-bold tracking-[0.18em] uppercase text-muted-warm border-b border-ink">
+          {/* Header */}
+          <div className="grid grid-cols-[56px_1fr_72px] sm:grid-cols-[70px_1fr_80px_80px_110px_70px] gap-2 sm:gap-4 px-4 sm:px-5 py-3 mono text-[9px] sm:text-[10px] font-bold tracking-[0.18em] uppercase text-muted-warm border-b border-ink">
             <div>Rank</div>
             <div>Player</div>
             <div className="text-right">Points</div>
             <div className="text-right hidden sm:block">Accuracy</div>
-            <div className="text-right">Hits</div>
+            <div className="text-right hidden sm:block">Form / 5</div>
+            <div className="text-right hidden sm:block">&Delta; Week</div>
           </div>
+
+          {/* Rows */}
           {leaderboard.slice(3).map((r) => {
             const isMe = r.user_id === user?.id;
             const accuracy =
@@ -110,22 +147,28 @@ export default async function LeaderboardPage() {
                 ? Math.round((r.correct_predictions / r.total_predictions) * 100)
                 : 0;
             const initial = r.display_name.charAt(0).toUpperCase();
+            const rankDelta =
+              r.previous_rank != null ? r.previous_rank - r.rank : null;
 
             return (
               <div
                 key={r.user_id}
-                className={`grid grid-cols-[60px_1fr_100px_140px_70px] sm:grid-cols-[70px_1fr_100px_140px_70px] gap-4 items-center px-5 py-3.5 border-b border-line last:border-b-0 transition-colors ${
+                className={`grid grid-cols-[56px_1fr_72px] sm:grid-cols-[70px_1fr_80px_80px_110px_70px] gap-2 sm:gap-4 items-center px-4 sm:px-5 py-3 sm:py-3.5 border-b border-line last:border-b-0 transition-colors ${
                   isMe ? "bg-blue-brand/[0.06]" : "hover:bg-white/50"
                 }`}
               >
-                <div className="mono font-semibold text-muted-warm">
-                  <span className="num">
+                {/* Rank + movement */}
+                <div className="mono font-semibold text-muted-warm flex items-center gap-1">
+                  <span className="num text-[13px]">
                     {String(r.rank).padStart(2, "0")}
                   </span>
+                  <RankDelta delta={rankDelta} />
                 </div>
-                <div className="flex items-center gap-3">
+
+                {/* Player */}
+                <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
                   {r.avatar_url ? (
-                    <div className="w-8 h-8 rounded-full overflow-hidden border border-paper">
+                    <div className="w-8 h-8 rounded-full overflow-hidden border border-paper shrink-0">
                       <Image
                         src={r.avatar_url}
                         alt={r.display_name}
@@ -135,17 +178,17 @@ export default async function LeaderboardPage() {
                       />
                     </div>
                   ) : (
-                    <div className="w-8 h-8 rounded-full bg-ink text-paper grid place-items-center serif italic font-semibold text-[14px] tracking-[-0.02em]">
+                    <div className="w-8 h-8 rounded-full bg-ink text-paper grid place-items-center serif italic font-semibold text-[14px] tracking-[-0.02em] shrink-0">
                       {initial}
                     </div>
                   )}
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="serif font-semibold text-[16px] tracking-[-0.015em] text-ink">
+                      <span className="serif font-semibold text-[15px] sm:text-[16px] tracking-[-0.015em] text-ink truncate">
                         {r.display_name}
                       </span>
                       {isMe && (
-                        <span className="mono text-[10px] tracking-[0.1em] uppercase text-blue-brand">
+                        <span className="mono text-[10px] tracking-[0.1em] uppercase text-blue-brand shrink-0">
                           you
                         </span>
                       )}
@@ -154,21 +197,29 @@ export default async function LeaderboardPage() {
                       )}
                     </div>
                     <span className="block mono text-[10px] tracking-[0.04em] text-muted-warm mt-0.5">
-                      {accuracy}% accurate · {r.correct_predictions}/{r.total_predictions} hits
+                      {accuracy}% accurate · {r.total_points} pts total
                     </span>
                   </div>
                 </div>
-                <div className="text-right serif font-semibold text-[22px] tracking-[-0.025em] num">
+
+                {/* Points */}
+                <div className="text-right serif font-semibold text-[20px] sm:text-[22px] tracking-[-0.025em] num">
                   {r.total_points}
                 </div>
-                <div className="hidden sm:flex flex-col items-end gap-1.5">
-                  <span className="mono text-[11px] font-semibold">{accuracy}%</span>
-                  <span className="w-[100px] h-[3px] bg-paper-deep">
-                    <span className="block h-full bg-blue-brand" style={{ width: `${accuracy}%` }} />
-                  </span>
+
+                {/* Accuracy */}
+                <div className="hidden sm:block text-right mono text-[12px] font-semibold">
+                  {accuracy}%
                 </div>
-                <div className="text-right mono font-semibold text-ink">
-                  {r.correct_predictions}
+
+                {/* Form / 5 */}
+                <div className="hidden sm:flex items-center justify-end gap-[3px]">
+                  <FormBlocks form={r.form} />
+                </div>
+
+                {/* Δ Week */}
+                <div className="hidden sm:block text-right">
+                  <WeeklyDelta points={r.weekly_points} />
                 </div>
               </div>
             );
@@ -179,6 +230,7 @@ export default async function LeaderboardPage() {
   );
 }
 
+/* ── Podium Seat ──────────────────────────────────────────── */
 function PodiumSeat({
   entry,
   place,
@@ -193,27 +245,44 @@ function PodiumSeat({
       ? Math.round((entry.correct_predictions / entry.total_predictions) * 100)
       : 0;
   const initial = entry.display_name.charAt(0).toUpperCase();
+  const rankDelta =
+    entry.previous_rank != null ? entry.previous_rank - entry.rank : null;
 
   const styles =
     place === 1
-      ? "bg-ink text-paper py-9 px-6 [&_.roman]:text-crown"
+      ? "bg-gold text-ink py-9 px-6"
       : place === 2
-      ? "bg-blue-brand text-white py-7 px-6 [&_.roman]:text-white/85"
-      : "bg-cream text-ink py-7 px-6 [&_.roman]:text-blue-brand";
+      ? "bg-silver text-white py-7 px-6"
+      : "bg-bronze text-white py-7 px-6";
+
+  const romanCls =
+    place === 1
+      ? "text-[120px] text-white/30"
+      : place === 2
+      ? "text-[80px] text-white/30"
+      : "text-[80px] text-white/30";
+
+  const avatarBorder =
+    place === 1
+      ? "border-white/40"
+      : "border-white/25";
+
+  const initialsStyle =
+    place === 1
+      ? "w-[72px] h-[72px] text-[26px] bg-white/20 text-ink"
+      : "w-14 h-14 text-[20px] bg-white/18 text-white";
 
   const romanMap = { 1: "I", 2: "II", 3: "III" };
 
   return (
     <div className={`text-center relative overflow-hidden border-r border-ink last:border-r-0 ${styles} ${isMe ? "ring-2 ring-blue-brand ring-inset" : ""}`}>
-      <div className={`roman serif italic font-normal leading-[0.85] tracking-[-0.05em] ${
-        place === 1 ? "text-[120px]" : "text-[80px]"
-      }`}>
+      <div className={`serif italic font-normal leading-[0.85] tracking-[-0.05em] ${romanCls}`}>
         {romanMap[place]}
       </div>
       {entry.avatar_url ? (
         <div className={`mx-auto rounded-full overflow-hidden mt-3.5 mb-3 border ${
-          place === 1 ? "w-[72px] h-[72px] border-crown/40" : "w-14 h-14 border-current/20"
-        }`}>
+          place === 1 ? "w-[72px] h-[72px]" : "w-14 h-14"
+        } ${avatarBorder}`}>
           <Image
             src={entry.avatar_url}
             alt={entry.display_name}
@@ -223,13 +292,7 @@ function PodiumSeat({
           />
         </div>
       ) : (
-        <div className={`mx-auto rounded-full mt-3.5 mb-3 grid place-items-center serif font-semibold tracking-[-0.02em] ${
-          place === 1
-            ? "w-[72px] h-[72px] text-[26px] bg-crown/20 text-crown"
-            : place === 2
-            ? "w-14 h-14 text-[20px] bg-white/18 text-white"
-            : "w-14 h-14 text-[20px] bg-ink/10 text-ink"
-        }`}>
+        <div className={`mx-auto rounded-full mt-3.5 mb-3 grid place-items-center serif font-semibold tracking-[-0.02em] ${initialsStyle}`}>
           {initial}
         </div>
       )}
@@ -249,12 +312,18 @@ function PodiumSeat({
       </div>
       <div className="flex gap-3 justify-center mt-3.5 mono text-[10px] tracking-[0.1em] uppercase opacity-75">
         <span>{accuracy}% acc</span>
-        <span>{entry.correct_predictions}/{entry.total_predictions} hits</span>
+        {rankDelta != null && rankDelta !== 0 && (
+          <span>{rankDelta > 0 ? `▲ ${rankDelta}` : `▼ ${Math.abs(rankDelta)}`}</span>
+        )}
+        {(rankDelta == null || rankDelta === 0) && (
+          <span>{entry.correct_predictions}/{entry.total_predictions} hits</span>
+        )}
       </div>
     </div>
   );
 }
 
+/* ── Podium Placeholder ───────────────────────────────────── */
 function PodiumPlaceholder({ place }: { place: 1 | 2 | 3 }) {
   const romanMap = { 1: "I", 2: "II", 3: "III" };
   return (
@@ -266,5 +335,63 @@ function PodiumPlaceholder({ place }: { place: 1 | 2 | 3 }) {
         Awaiting<br />a contender
       </p>
     </div>
+  );
+}
+
+/* ── Rank Delta Arrow ─────────────────────────────────────── */
+function RankDelta({ delta }: { delta: number | null }) {
+  if (delta == null || delta === 0) {
+    return <span className="mono text-[10px] text-muted-warm/50">–</span>;
+  }
+  if (delta > 0) {
+    return (
+      <span className="mono text-[10px] text-good font-bold">
+        ▲&thinsp;{delta}
+      </span>
+    );
+  }
+  return (
+    <span className="mono text-[10px] text-bad font-bold">
+      ▼&thinsp;{Math.abs(delta)}
+    </span>
+  );
+}
+
+/* ── Form Blocks (last 5 results) ─────────────────────────── */
+function FormBlocks({ form }: { form: number[] }) {
+  // Pad to 5 blocks
+  const blocks = [...form];
+  while (blocks.length < 5) blocks.push(-1); // -1 = empty
+
+  return (
+    <>
+      {blocks.map((pts, i) => {
+        let bg: string;
+        if (pts === 5) bg = "bg-good";          // exact score
+        else if (pts === 2) bg = "bg-crown";     // correct result
+        else if (pts === 0) bg = "bg-bad";       // wrong
+        else bg = "bg-paper-deep";               // no data
+
+        return (
+          <span
+            key={i}
+            className={`inline-block w-[16px] h-[16px] ${bg}`}
+            title={pts === 5 ? "Exact +5" : pts === 2 ? "Result +2" : pts === 0 ? "Wrong" : "–"}
+          />
+        );
+      })}
+    </>
+  );
+}
+
+/* ── Weekly Delta ─────────────────────────────────────────── */
+function WeeklyDelta({ points }: { points: number }) {
+  if (points === 0) {
+    return <span className="mono text-[12px] text-muted-warm">0</span>;
+  }
+  return (
+    <span className={`mono text-[12px] font-bold ${points > 0 ? "text-good" : "text-bad"}`}>
+      {points > 0 ? "+" : ""}{points}
+    </span>
   );
 }

@@ -71,6 +71,8 @@ export interface LeaderboardEntry {
   correct_predictions: number;
   total_predictions: number;
   rank: number;
+  previous_rank: number | null;
+  weekly_points: number;
   updated_at: string;
 }
 

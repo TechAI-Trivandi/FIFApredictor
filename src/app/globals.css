@@ -68,6 +68,9 @@
   --blue: #2F4FFC;
   --blue-bright: #4D6BFF;
   --crown: #D4A017;
+  --gold: #B8960C;
+  --silver: #6B6E73;
+  --bronze: #8B6836;
   --good: #1F5826;
   --bad: #B8252A;
 
@@ -183,6 +186,9 @@
 .text-blue-bright { color: var(--blue-bright); }
 .text-navy { color: var(--navy); }
 .text-crown { color: var(--crown); }
+.text-gold { color: var(--gold); }
+.text-silver { color: var(--silver); }
+.text-bronze { color: var(--bronze); }
 .text-good { color: var(--good); }
 .text-bad { color: var(--bad); }
 
@@ -194,6 +200,9 @@
 .bg-blue-bright { background-color: var(--blue-bright); }
 .bg-navy { background-color: var(--navy); }
 .bg-crown { background-color: var(--crown); }
+.bg-gold { background-color: var(--gold); }
+.bg-silver { background-color: var(--silver); }
+.bg-bronze { background-color: var(--bronze); }
 .bg-good { background-color: var(--good); }
 .bg-bad { background-color: var(--bad); }
 
