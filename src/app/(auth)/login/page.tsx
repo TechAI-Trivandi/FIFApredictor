@@ -103,6 +103,13 @@ export default function LoginPage() {
         </button>
       </form>
 
+      <div className="mt-5 text-center">
+        <span className="text-paper/40 text-[12px]">Don&apos;t have an account? </span>
+        <a href="/join" className="text-blue-bright text-[12px] font-medium hover:underline">
+          Join the pool
+        </a>
+      </div>
+
       <div className="mt-6 mono text-[10px] uppercase tracking-[0.16em] text-paper/40 text-center">
         Trivandi · World Cup 2026 Pool
       </div>

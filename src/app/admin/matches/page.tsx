@@ -127,7 +127,7 @@ export default function AdminMatchesPage() {
                 <TableRow key={match.id}>
                   <TableCell className="text-gray-500">{match.match_number}</TableCell>
                   <TableCell className="font-medium">
-                    {match.home_team.short_code} vs {match.away_team.short_code}
+                    {match.home_team?.short_code ?? "TBD"} vs {match.away_team?.short_code ?? "TBD"}
                   </TableCell>
                   <TableCell className="text-sm text-gray-500">
                     {STAGE_LABELS[match.stage] || match.stage}
@@ -174,15 +174,15 @@ export default function AdminMatchesPage() {
                       <DialogContent>
                         <DialogHeader>
                           <DialogTitle>
-                            Update Score: {match.home_team.short_code} vs{" "}
-                            {match.away_team.short_code}
+                            Update Score: {match.home_team?.short_code ?? "TBD"} vs{" "}
+                            {match.away_team?.short_code ?? "TBD"}
                           </DialogTitle>
                         </DialogHeader>
                         <div className="space-y-4 pt-4">
                           <div className="flex gap-4 items-center justify-center">
                             <div className="text-center">
                               <p className="text-sm font-medium mb-2">
-                                {match.home_team.name}
+                                {match.home_team?.name ?? "TBD"}
                               </p>
                               <Input
                                 type="number"
@@ -195,7 +195,7 @@ export default function AdminMatchesPage() {
                             <span className="text-lg font-bold mt-6">-</span>
                             <div className="text-center">
                               <p className="text-sm font-medium mb-2">
-                                {match.away_team.name}
+                                {match.away_team?.name ?? "TBD"}
                               </p>
                               <Input
                                 type="number"

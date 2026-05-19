@@ -30,7 +30,7 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const path = request.nextUrl.pathname;
-  const isAuthPage = path.startsWith("/login") || path.startsWith("/signup");
+  const isAuthPage = path.startsWith("/login") || path.startsWith("/signup") || path.startsWith("/join");
   const isAdminPage = path.startsWith("/admin");
   const isPublicPath = isAuthPage || path.startsWith("/auth/callback");
 

@@ -161,6 +161,44 @@ export default function AdminPage() {
         </Card>
       </div>
 
+      {/* Testing Tools */}
+      <div>
+        <h2 className="text-sm font-bold uppercase tracking-wider text-gray-500 mb-3">
+          Testing Tools
+        </h2>
+        <Card className="border-gray-200">
+          <CardContent className="p-5">
+            <p className="text-sm text-gray-600 mb-4">
+              Clear all predictions for user testing. This removes every prediction from every user.
+            </p>
+            <Button
+              onClick={async () => {
+                if (!confirm("Are you sure? This will delete ALL predictions from ALL users.")) return;
+                setSyncing("clearing");
+                const { error } = await supabase.from("predictions").delete().neq("id", 0);
+                if (error) {
+                  setSyncStatus(`Failed to clear: ${error.message}`);
+                } else {
+                  setSyncStatus("All predictions cleared.");
+                }
+                setSyncing(null);
+              }}
+              disabled={syncing !== null}
+              variant="outline"
+              size="sm"
+              className="text-xs border-red-300 text-red-600 hover:bg-red-50"
+            >
+              {syncing === "clearing" ? "Clearing..." : "Clear All Predictions"}
+            </Button>
+            {syncStatus && syncStatus.includes("predictions") && (
+              <div className="mt-3 p-3 rounded-md bg-gray-50 border border-gray-200 text-xs text-gray-700">
+                {syncStatus}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
       {/* Football API */}
       <div>
         <h2 className="text-sm font-bold uppercase tracking-wider text-gray-500 mb-3">
@@ -169,9 +207,8 @@ export default function AdminPage() {
         <Card className="border-gray-200">
           <CardContent className="p-5">
             <p className="text-sm text-gray-600 mb-4">
-              Auto-sync fixtures and live scores from API-Football. Free plan
-              doesn&apos;t include 2026 yet — manual entry on the Matches page works
-              perfectly.
+              Auto-sync fixtures and live scores from football-data.org. Scores update
+              automatically every 15 minutes via cron during the tournament.
             </p>
             <div className="flex flex-col sm:flex-row gap-2">
               <Button
