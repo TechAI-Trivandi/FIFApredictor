@@ -1,0 +1,1561 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Football Predictor — Interactive Redesign</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,400;0,600;0,800;1,400;1,600&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<style>
+  :root {
+    --navy: #10154F;
+    --navy-deep: #070A2E;
+    --blue: #2F4FFC;
+    --blue-bright: #4D6BFF;
+    --cream: #ECECDF;
+    --paper: #F2F0E6;
+    --paper-deep: #E8E5D7;
+    --ink: #0A0A14;
+    --line: #D7D3C2;
+    --line-soft: #E5E1D1;
+    --muted: #6E6A55;
+    --good: #1F5826;
+    --bad: #B8252A;
+    --crown: #D4A017;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: 'Space Grotesk', system-ui, sans-serif;
+    background: var(--paper);
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    /* paper grain */
+    background-image:
+      radial-gradient(circle at 20% 30%, rgba(16,21,79,0.025) 0, transparent 40%),
+      radial-gradient(circle at 80% 70%, rgba(47,79,252,0.02) 0, transparent 40%);
+  }
+  .serif { font-family: 'Fraunces', Georgia, serif; }
+  .mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+  .it { font-style: italic; font-family: 'Fraunces', Georgia, serif; font-weight: 400; }
+  .num { font-feature-settings: "tnum"; font-variant-numeric: tabular-nums; }
+  .eyebrow { font-size: 10px; font-weight: 700; letter-spacing: 0.22em; text-transform: uppercase; }
+
+  .app {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 28px 28px 80px;
+  }
+
+  /* ─── HEAD ─── */
+  .topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding-bottom: 22px;
+    border-bottom: 1px solid var(--ink);
+  }
+  .brand {
+    display: flex; align-items: center; gap: 16px;
+  }
+  .brand .mark {
+    height: 44px; display: flex; align-items: center;
+  }
+  .brand .mark img { height: 100%; width: auto; display: block; }
+  .brand .title-wrap { display: flex; flex-direction: column; justify-content: center; line-height: 1.15; padding-top: 1px; }
+  .brand .title { font-size: 11px; font-weight: 700; letter-spacing: 0.24em; text-transform: uppercase; color: var(--ink); }
+  .brand .title small { display: block; font-family: 'Fraunces', serif; font-style: italic; font-weight: 400; font-size: 13px; letter-spacing: 0; text-transform: none; color: var(--muted); margin-top: 2px;}
+  .topnav { display: flex; gap: 0; }
+  .topnav button {
+    background: transparent; border: 0; padding: 10px 18px;
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 11px; font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase;
+    color: var(--muted); cursor: pointer; position: relative;
+    transition: color 0.15s ease;
+  }
+  .topnav button:hover { color: var(--ink); }
+  .topnav button.active { color: var(--ink); }
+  .topnav button.active::after {
+    content: ''; position: absolute;
+    left: 18px; right: 18px; bottom: -22px;
+    height: 2px; background: var(--ink);
+  }
+  .topnav button .dot { display: inline-block; width: 5px; height: 5px; border-radius: 999px; background: var(--blue); margin-left: 5px; vertical-align: 2px; animation: pulse 1.4s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+  .me { display: flex; align-items: center; gap: 12px; font-size: 12px; }
+  .me .av { width: 30px; height: 30px; border-radius: 999px; background: var(--ink); color: var(--paper); display: grid; place-items: center; font-weight: 700; font-size: 13px; }
+  .me .lb { font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.1em; color: var(--muted); display: flex; flex-direction: column; align-items: flex-end; }
+  .me .lb b { color: var(--ink); font-family: 'Fraunces', serif; font-style: italic; font-weight: 600; font-size: 16px; letter-spacing: -0.02em; }
+
+  /* ─── HEADERS ─── */
+  .page-head { padding: 36px 0 24px; display: grid; grid-template-columns: 1fr auto; gap: 24px; align-items: end; border-bottom: 1px solid var(--ink); }
+  .page-head .kicker { display: flex; gap: 14px; align-items: center; margin-bottom: 18px; }
+  .page-head .kicker .num-label { font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.12em; color: var(--muted); }
+  .page-head .kicker .rule { flex: 1; height: 1px; background: var(--line); }
+  .page-head h1 {
+    margin: 0;
+    font-family: 'Fraunces', serif;
+    font-weight: 600;
+    font-size: 96px;
+    line-height: 0.88;
+    letter-spacing: -0.045em;
+  }
+  .page-head h1 i { font-style: italic; font-weight: 400; color: var(--blue); }
+  .page-head .right { text-align: right; padding-bottom: 12px; }
+  .page-head .right .lede { font-family: 'Fraunces', serif; font-style: italic; font-weight: 400; font-size: 18px; line-height: 1.4; max-width: 320px; color: var(--muted); }
+  .page-head .right .meta { font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); margin-top: 14px; }
+
+  /* ─── DASHBOARD ─── */
+  .dash-grid { padding-top: 28px; display: grid; grid-template-columns: 1.6fr 1fr; gap: 24px; align-items: start; }
+  .countdown-block {
+    grid-column: 1;
+    background: var(--ink);
+    color: var(--paper);
+    border-radius: 0;
+    padding: 38px 36px 36px;
+    position: relative;
+    overflow: hidden;
+    min-height: 380px;
+  }
+  .countdown-block::before {
+    content: ''; position: absolute; inset: 0;
+    background-image: url('assets/hero-bg.webp');
+    background-size: cover;
+    background-position: center right;
+    opacity: 0.55;
+    mix-blend-mode: luminosity;
+    pointer-events: none;
+  }
+  .countdown-block::after {
+    content: ''; position: absolute; inset: 0;
+    background:
+      linear-gradient(90deg, var(--ink) 0%, rgba(10,10,20,0.78) 45%, rgba(10,10,20,0.45) 70%, rgba(10,10,20,0.85) 100%),
+      repeating-linear-gradient(90deg, transparent 0 80px, rgba(255,255,255,0.03) 80px 81px);
+    pointer-events: none;
+  }
+  .countdown-block > * { position: relative; z-index: 1; }
+  .countdown-block .top { position: relative; display: flex; justify-content: space-between; align-items: flex-start; }
+  .countdown-block .top .greet-eb { color: var(--blue-bright); }
+  .countdown-block .top .meta-line { font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.18em; color: rgba(255,255,255,0.4); text-transform: uppercase; }
+  .countdown-block .greet {
+    position: relative;
+    font-family: 'Fraunces', serif;
+    font-weight: 600;
+    font-size: 38px;
+    letter-spacing: -0.025em;
+    line-height: 1;
+    margin-top: 14px;
+  }
+  .countdown-block .greet i { font-style: italic; font-weight: 400; color: var(--blue-bright); }
+  .countdown-block .number-row {
+    position: relative;
+    margin-top: 20px;
+    display: flex;
+    align-items: flex-end;
+    gap: 14px;
+  }
+  .countdown-block .big {
+    font-family: 'Fraunces', serif;
+    font-weight: 600;
+    font-size: 220px;
+    line-height: 0.78;
+    letter-spacing: -0.07em;
+    font-feature-settings: "tnum";
+    color: var(--paper);
+  }
+  .countdown-block .big-label {
+    padding-bottom: 14px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.55);
+    line-height: 1.4;
+    max-width: 96px;
+  }
+  .countdown-block .big-label b { color: var(--paper); font-weight: 500; }
+  .countdown-block .foot {
+    position: relative;
+    margin-top: 24px;
+    padding-top: 16px;
+    border-top: 1px solid rgba(255,255,255,0.15);
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 24px;
+  }
+  .countdown-block .foot .stat .l { font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: rgba(255,255,255,0.5); font-family: 'JetBrains Mono', monospace; }
+  .countdown-block .foot .stat .v { font-family: 'Fraunces', serif; font-style: italic; font-weight: 600; font-size: 28px; line-height: 1; margin-top: 6px; }
+  .countdown-block .foot .stat .v u { text-decoration: none; color: rgba(255,255,255,0.4); margin-left: 4px; font-size: 14px; }
+  .countdown-block .foot .stat.up .v { color: var(--blue-bright); }
+
+  /* next pick card */
+  .next-pick {
+    background: var(--paper-deep);
+    border: 1px solid var(--ink);
+    padding: 22px;
+  }
+  .next-pick .h { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 18px; padding-bottom: 12px; border-bottom: 1px solid var(--ink); }
+  .next-pick .h .ttl { font-family: 'Fraunces', serif; font-style: italic; font-weight: 400; font-size: 22px; }
+  .next-pick .h .live { font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--blue); display: inline-flex; align-items: center; gap: 6px; }
+  .next-pick .matchup {
+    display: grid; grid-template-columns: 1fr auto 1fr;
+    gap: 14px;
+    align-items: center;
+    padding: 6px 0 16px;
+  }
+  .team-block { display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; cursor: pointer; transition: transform 0.15s ease; }
+  .team-block:hover { transform: translateY(-2px); }
+  .flag {
+    width: 56px; height: 56px;
+    border-radius: 50%;
+    overflow: hidden;
+    background-size: cover; background-position: center;
+    box-shadow: inset 0 0 0 2px var(--paper-deep), 0 0 0 1px var(--ink);
+  }
+  .team-block .name { font-family: 'Fraunces', serif; font-weight: 600; font-size: 16px; letter-spacing: -0.015em; }
+  .team-block .code { font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.12em; color: var(--muted); }
+  .vs {
+    text-align: center;
+  }
+  .vs .it { font-size: 30px; line-height: 1; color: var(--ink); font-weight: 400; }
+  .vs .when { font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.14em; color: var(--muted); margin-top: 6px; text-transform: uppercase; }
+  .vs .stage-mini { font-family: 'JetBrains Mono', monospace; font-size: 9px; letter-spacing: 0.14em; color: var(--blue); text-transform: uppercase; margin-top: 4px; font-weight: 600;}
+
+  .pick-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin-top: 4px; }
+  .pick-row .opt {
+    background: transparent;
+    border: 1px solid var(--ink);
+    padding: 12px 8px;
+    cursor: pointer;
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    color: var(--ink);
+    transition: all 0.15s ease;
+    text-align: left;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+  .pick-row .opt:hover:not(.picked) { background: var(--paper); }
+  .pick-row .opt .lbl { text-transform: uppercase; }
+  .pick-row .opt .pct { font-family: 'JetBrains Mono', monospace; font-weight: 500; font-size: 10px; color: var(--muted); }
+  .pick-row .opt.picked { background: var(--ink); color: var(--paper); }
+  .pick-row .opt.picked .pct { color: rgba(255,255,255,0.55); }
+
+  /* stats column */
+  .stats-stack { display: grid; gap: 0; }
+  .stat-box {
+    background: transparent;
+    border: 1px solid var(--ink);
+    border-bottom: 0;
+    padding: 18px 22px;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    gap: 16px;
+  }
+  .stat-box:last-child { border-bottom: 1px solid var(--ink); }
+  .stat-box.feature {
+    background: var(--blue);
+    color: white;
+    border-color: var(--blue);
+  }
+  .stat-box.feature + .stat-box { border-top: 0; }
+  .stat-box .label { font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; color: var(--muted); font-family: 'JetBrains Mono', monospace; }
+  .stat-box.feature .label { color: rgba(255,255,255,0.7); }
+  .stat-box .value { font-family: 'Fraunces', serif; font-weight: 600; font-size: 56px; line-height: 0.9; letter-spacing: -0.04em; margin-top: 2px; }
+  .stat-box .value i { font-style: italic; font-weight: 400; }
+  .stat-box .value sup { font-size: 22px; vertical-align: 28px; font-style: italic; font-weight: 400; opacity: 0.8; margin-left: 2px; }
+  .stat-box .sub { font-size: 11px; color: var(--muted); margin-top: 6px; font-family: 'JetBrains Mono', monospace; letter-spacing: 0.06em; }
+  .stat-box.feature .sub { color: rgba(255,255,255,0.78); }
+  .stat-box .trend { font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 600; padding: 4px 8px; }
+  .trend.up { color: var(--good); }
+  .trend.down { color: var(--bad); }
+  .stat-box.feature .trend.up { color: white; background: rgba(255,255,255,0.15); }
+
+  /* timeline */
+  .timeline {
+    grid-column: 1 / -1;
+    margin-top: 24px;
+    border: 1px solid var(--ink);
+    padding: 24px 24px 28px;
+    background: var(--paper);
+  }
+  .timeline .h { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 24px; }
+  .timeline .h .t { font-family: 'Fraunces', serif; font-style: italic; font-weight: 400; font-size: 22px; }
+  .timeline .h .legend { display: flex; gap: 18px; font-size: 10px; color: var(--muted); font-family: 'JetBrains Mono', monospace; letter-spacing: 0.1em; text-transform: uppercase; }
+  .timeline .h .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .timeline .h .legend .dot { width: 7px; height: 7px; border-radius: 999px; }
+  .tl-row { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+  .tl-step { padding-top: 4px; cursor: pointer; }
+  .tl-step .lbl { font-family: 'Fraunces', serif; font-weight: 600; font-size: 14px; letter-spacing: -0.01em; }
+  .tl-step.live .lbl { color: var(--blue); }
+  .tl-step.done .lbl { color: var(--muted); }
+  .tl-step .when { font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.06em; color: var(--muted); margin-top: 2px; }
+  .tl-step .bar { height: 4px; background: var(--paper-deep); margin-top: 10px; }
+  .tl-step.done .bar { background: var(--ink); }
+  .tl-step.live .bar { background: var(--blue); height: 6px; margin-top: 8px; box-shadow: 0 0 0 3px rgba(47,79,252,0.18); }
+  .tl-step:hover .bar { transform: scaleY(1.5); }
+
+  /* ─── PREDICTIONS ─── */
+  .pred-progress {
+    display: flex; align-items: center; gap: 24px;
+    padding: 14px 0;
+  }
+  .pred-progress .num-bg {
+    font-family: 'Fraunces', serif; font-style: italic; font-weight: 600;
+    font-size: 56px; line-height: 1; letter-spacing: -0.04em; color: var(--ink);
+  }
+  .pred-progress .num-bg u { text-decoration: none; color: var(--muted); font-style: italic; }
+  .pred-progress .num-bg .of { font-size: 22px; color: var(--muted); margin: 0 6px; }
+  .pred-progress .info { flex: 1; }
+  .pred-progress .info .row1 { display: flex; justify-content: space-between; font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); }
+  .pred-progress .info .bar { height: 3px; background: var(--paper-deep); margin-top: 8px; }
+  .pred-progress .info .fill { height: 100%; background: var(--blue); transition: width 0.4s ease; }
+
+  .stage-tabs {
+    display: flex; gap: 0;
+    border-top: 1px solid var(--ink);
+    border-bottom: 1px solid var(--ink);
+    margin-top: 8px;
+  }
+  .stage-tabs button {
+    background: transparent; border: 0; cursor: pointer;
+    padding: 14px 18px;
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 11px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase;
+    color: var(--muted);
+    border-right: 1px solid var(--line);
+    transition: background 0.15s ease;
+    display: inline-flex; align-items: center; gap: 8px;
+    flex: 1;
+    justify-content: center;
+  }
+  .stage-tabs button:last-child { border-right: 0; }
+  .stage-tabs button:hover { color: var(--ink); background: var(--paper-deep); }
+  .stage-tabs button.active { background: var(--ink); color: var(--paper); }
+  .stage-tabs button .ct { font-family: 'JetBrains Mono', monospace; font-size: 9px; padding: 1px 5px; background: rgba(0,0,0,0.06); border-radius: 2px; }
+  .stage-tabs button.active .ct { background: rgba(255,255,255,0.18); color: rgba(255,255,255,0.85); }
+
+  .day-scrub { display: flex; gap: 6px; margin: 22px 0 18px; overflow-x: auto; padding-bottom: 4px; }
+  .day-scrub .day {
+    flex-shrink: 0; min-width: 78px;
+    border: 1px solid var(--line);
+    background: transparent;
+    padding: 10px 14px 12px;
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.15s ease;
+  }
+  .day-scrub .day:hover { background: var(--paper-deep); }
+  .day-scrub .day .dn { font-family: 'JetBrains Mono', monospace; font-size: 9px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); }
+  .day-scrub .day .dd { font-family: 'Fraunces', serif; font-weight: 600; font-size: 26px; letter-spacing: -0.03em; line-height: 1; margin-top: 4px; }
+  .day-scrub .day .ct { font-size: 10px; color: var(--muted); margin-top: 4px; font-family: 'JetBrains Mono', monospace; }
+  .day-scrub .day.active { background: var(--ink); border-color: var(--ink); color: var(--paper); }
+  .day-scrub .day.active .dn,
+  .day-scrub .day.active .ct { color: rgba(255,255,255,0.7); }
+  .day-scrub .day.complete .dd { color: var(--muted); }
+  .day-scrub .day.complete .dot-row { display: flex; gap: 2px; justify-content: center; margin-top: 4px; }
+  .day-scrub .day.complete .dot-row span { width: 5px; height: 5px; border-radius: 999px; }
+
+  .day-section { padding: 22px 0 4px; }
+  .day-section .day-head {
+    display: flex; justify-content: space-between; align-items: baseline;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--ink);
+  }
+  .day-section .day-head h3 {
+    margin: 0;
+    font-family: 'Fraunces', serif; font-weight: 600;
+    font-size: 32px; letter-spacing: -0.02em; line-height: 1;
+  }
+  .day-section .day-head h3 i { font-style: italic; font-weight: 400; color: var(--muted); }
+  .day-section .day-head .progress-mini { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase; }
+  .day-section .day-head .progress-mini b { color: var(--ink); font-family: 'Fraunces', serif; font-style: italic; font-weight: 600; font-size: 18px; letter-spacing: -0.01em; text-transform: none; vertical-align: -2px; }
+
+  .match-card {
+    border-bottom: 1px solid var(--line);
+    padding: 22px 0;
+    display: grid;
+    grid-template-columns: 90px 1fr;
+    gap: 26px;
+    transition: background 0.2s ease;
+  }
+  .match-card:hover { background: rgba(231,225,205,0.4); margin: 0 -22px; padding: 22px 22px; }
+  .match-card.draft { background: rgba(47,79,252,0.045); margin: 0 -22px; padding: 22px 22px; border-bottom-color: var(--blue); }
+  .match-card .when {
+    text-align: left;
+    padding-top: 4px;
+  }
+  .match-card .when .time { font-family: 'Fraunces', serif; font-weight: 600; font-size: 28px; line-height: 1; letter-spacing: -0.025em; }
+  .match-card .when .time i { font-style: italic; font-weight: 400; color: var(--blue); }
+  .match-card .when .stage-tag { display: inline-block; margin-top: 8px; font-family: 'JetBrains Mono', monospace; font-size: 9px; padding: 2px 6px; background: var(--paper-deep); color: var(--ink); letter-spacing: 0.1em; font-weight: 600; }
+  .match-card .when .crowd-line { font-family: 'JetBrains Mono', monospace; font-size: 9px; color: var(--muted); margin-top: 8px; letter-spacing: 0.06em; text-transform: uppercase; }
+
+  .pick-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; align-items: stretch; }
+  .pick-tile {
+    border: 1px solid var(--ink);
+    background: transparent;
+    padding: 16px 14px 14px;
+    cursor: pointer;
+    display: flex; flex-direction: column;
+    gap: 8px;
+    text-align: left;
+    font-family: 'Space Grotesk', sans-serif;
+    transition: all 0.18s ease;
+    color: var(--ink);
+    position: relative;
+  }
+  .pick-tile:hover:not(.picked) { background: var(--paper-deep); }
+  .pick-tile .top-row { display: flex; align-items: center; gap: 10px; }
+  .pick-tile .flag { width: 32px; height: 32px; }
+  .pick-tile.draw .draw-mark {
+    width: 32px; height: 32px;
+    display: grid; place-items: center;
+    border: 1px dashed var(--ink);
+    font-family: 'Fraunces', serif; font-style: italic; font-weight: 400; font-size: 22px;
+  }
+  .pick-tile .nm { font-family: 'Fraunces', serif; font-weight: 600; font-size: 18px; letter-spacing: -0.015em; line-height: 1; }
+  .pick-tile.draw .nm { color: var(--muted); font-style: italic; font-weight: 400; }
+  .pick-tile .cd { font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.08em; color: var(--muted); margin-top: 2px; }
+  .pick-tile .crowd-bar {
+    margin-top: auto;
+    padding-top: 10px;
+    display: flex; justify-content: space-between; align-items: baseline;
+    font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--muted); letter-spacing: 0.04em;
+  }
+  .pick-tile .crowd-bar b { font-family: 'Fraunces', serif; font-style: italic; font-weight: 600; font-size: 16px; color: var(--ink); letter-spacing: -0.01em; }
+  .pick-tile .crowd-track { height: 2px; background: var(--paper-deep); margin-top: 6px; overflow: hidden; }
+  .pick-tile .crowd-fill { height: 100%; background: var(--ink); transition: width 0.4s ease; }
+  .pick-tile.picked { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+  .pick-tile.picked .cd, .pick-tile.picked .crowd-bar { color: rgba(255,255,255,0.55); }
+  .pick-tile.picked .crowd-bar b, .pick-tile.picked .nm { color: var(--paper); }
+  .pick-tile.picked .crowd-track { background: rgba(255,255,255,0.18); }
+  .pick-tile.picked .crowd-fill { background: var(--blue-bright); }
+  .pick-tile.picked.draw .draw-mark { border-color: var(--paper); color: var(--paper); border-style: dashed; }
+  .pick-tile.draft { background: var(--paper); border-color: var(--blue); box-shadow: inset 0 0 0 1px var(--blue); }
+
+  /* score picker */
+  .score-picker {
+    margin-top: 14px;
+    border: 1px dashed var(--line);
+    background: rgba(255,255,255,0.4);
+    padding: 12px 14px;
+  }
+  .score-picker.draft { border-color: var(--blue); border-style: solid; background: rgba(47,79,252,0.04); }
+  .score-picker .sp-h { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; font-family: 'JetBrains Mono', monospace; font-size: 9px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); }
+  .score-picker .sp-h .pts { color: var(--blue); font-weight: 700; }
+  .score-picker .sp-h .preview { color: var(--ink); font-family: 'Fraunces', serif; font-style: italic; font-weight: 600; font-size: 16px; letter-spacing: -0.01em; text-transform: none; }
+  .score-picker .sp-h .preview span { color: var(--muted); margin: 0 6px; }
+  .score-picker .sp-row { display: grid; grid-template-columns: 70px 1fr; gap: 10px; align-items: center; margin-bottom: 6px; }
+  .score-picker .sp-row:last-child { margin-bottom: 0; }
+  .score-picker .sp-row .lbl { font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.1em; color: var(--muted); font-weight: 600; }
+  .score-picker .sp-row .nums { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
+  .score-picker .sp-row .nums button {
+    background: transparent; border: 1px solid var(--line); cursor: pointer;
+    padding: 6px 0;
+    font-family: 'Fraunces', serif; font-weight: 600; font-size: 14px; letter-spacing: -0.01em;
+    color: var(--ink);
+    transition: all 0.12s ease;
+  }
+  .score-picker .sp-row .nums button:hover { background: var(--paper-deep); }
+  .score-picker .sp-row .nums button.on { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+
+  /* photo upload on leaderboard */
+  .lb-row .who .av.photo { background: var(--paper-deep); padding: 0; overflow: hidden; }
+  .lb-row .who .av.photo img { width: 100%; height: 100%; object-fit: cover; }
+  .lb-row .who .name-line { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+  .lb-row .who .name-line .me-tag { margin-left: 0; }
+  .lb-row .who .upload-pill {
+    display: inline-flex; align-items: center; gap: 5px;
+    margin-left: 0;
+    padding: 4px 8px;
+    border: 1px dashed var(--blue); color: var(--blue);
+    font-family: 'JetBrains Mono', monospace; font-size: 9px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase;
+    cursor: pointer; transition: background 0.15s ease;
+  }
+  .lb-row .who .upload-pill:hover { background: rgba(47,79,252,0.08); }
+  .lb-row .who .upload-pill input { display: none; }
+
+  /* bracket/calendar placeholder views */
+  .alt-view {
+    margin-top: 28px;
+    border: 1px solid var(--ink);
+    background: var(--paper);
+    padding: 32px;
+  }
+  .alt-view h3 { margin: 0 0 8px; font-family: 'Fraunces', serif; font-weight: 600; font-size: 28px; letter-spacing: -0.02em; }
+  .alt-view h3 i { font-style: italic; font-weight: 400; color: var(--blue); }
+  .alt-view p { margin: 0 0 22px; font-family: 'Fraunces', serif; font-style: italic; font-size: 15px; color: var(--muted); max-width: 480px; line-height: 1.5; }
+  .bracket-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 16px;
+    align-items: center;
+  }
+  .bracket-col-h { font-family: 'JetBrains Mono', monospace; font-size: 9px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); padding-bottom: 10px; border-bottom: 1px solid var(--line); margin-bottom: 8px; text-align: center; }
+  .bracket-col { display: flex; flex-direction: column; gap: 12px; justify-content: space-around; }
+  .br-slot {
+    border: 1px solid var(--ink);
+    background: var(--paper-deep);
+    padding: 8px 10px;
+    font-family: 'Fraunces', serif; font-weight: 600; font-size: 13px; letter-spacing: -0.01em;
+    display: flex; justify-content: space-between; align-items: center;
+    min-height: 34px;
+  }
+  .br-slot.tbd { color: var(--muted); font-style: italic; font-weight: 400; background: transparent; border-style: dashed; }
+  .br-slot .pts-mini { font-family: 'JetBrains Mono', monospace; font-size: 9px; color: var(--blue); letter-spacing: 0.1em; }
+  .br-final { background: var(--ink); color: var(--paper); border-color: var(--ink); justify-content: center; min-height: 50px; font-size: 16px; }
+  .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--ink); }
+  .cal-grid .cal-h { background: var(--ink); color: var(--paper); padding: 8px 10px; font-family: 'JetBrains Mono', monospace; font-size: 9px; letter-spacing: 0.18em; text-transform: uppercase; text-align: center; }
+  .cal-grid .cal-c { background: var(--paper); padding: 10px; min-height: 76px; }
+  .cal-grid .cal-c .d { font-family: 'Fraunces', serif; font-weight: 600; font-size: 14px; letter-spacing: -0.01em; color: var(--muted); }
+  .cal-grid .cal-c.has .d { color: var(--ink); }
+  .cal-grid .cal-c .ev { margin-top: 4px; font-family: 'JetBrains Mono', monospace; font-size: 9px; letter-spacing: 0.06em; padding: 2px 4px; background: var(--blue); color: white; display: inline-block; }
+  .cal-grid .cal-c .ev.gold { background: var(--crown); color: var(--ink); }
+
+  .match-foot {
+    grid-column: 2;
+    margin-top: 14px;
+    display: flex; justify-content: space-between; align-items: center;
+    font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase;
+  }
+  .match-foot b { color: var(--ink); }
+  .match-foot .saved { color: var(--good); }
+  .match-foot .draft-tag { color: var(--blue); }
+
+  .save-bar {
+    position: sticky; bottom: 14px;
+    margin: 32px 0 0;
+    background: var(--ink); color: var(--paper);
+    padding: 16px 24px;
+    display: flex; align-items: center; justify-content: space-between;
+    box-shadow: 0 12px 32px -10px rgba(0,0,0,0.35);
+    z-index: 10;
+  }
+  .save-bar .info b { font-family: 'Fraunces', serif; font-weight: 600; font-size: 18px; letter-spacing: -0.01em; }
+  .save-bar .info small { display: block; color: rgba(255,255,255,0.6); font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.1em; margin-top: 4px; text-transform: uppercase; }
+  .save-bar button {
+    background: var(--blue); color: white; border: 0;
+    padding: 12px 24px;
+    font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 12px;
+    letter-spacing: 0.16em; text-transform: uppercase;
+    cursor: pointer;
+    transition: background 0.15s ease;
+  }
+  .save-bar button:hover { background: var(--blue-bright); }
+
+  /* ─── LEADERBOARD ─── */
+  .lb-filter { display: flex; gap: 0; border: 1px solid var(--ink); }
+  .lb-filter button {
+    background: transparent; border: 0; cursor: pointer;
+    padding: 11px 18px;
+    font-family: 'Space Grotesk', sans-serif; font-size: 10px; font-weight: 700;
+    letter-spacing: 0.2em; text-transform: uppercase;
+    color: var(--muted);
+    border-right: 1px solid var(--line);
+    transition: background 0.15s ease;
+  }
+  .lb-filter button:last-child { border-right: 0; }
+  .lb-filter button:hover { background: var(--paper-deep); }
+  .lb-filter button.active { background: var(--ink); color: var(--paper); }
+
+  .podium { display: grid; grid-template-columns: 0.85fr 1fr 0.85fr; align-items: end; gap: 0; margin-top: 28px; border: 1px solid var(--ink); }
+  .seat { padding: 28px 22px 30px; text-align: center; position: relative; overflow: hidden; border-right: 1px solid var(--ink); }
+  .seat:last-child { border-right: 0; }
+  .seat.first { background: var(--ink); color: var(--paper); padding: 36px 22px 40px; }
+  .seat.second { background: var(--blue); color: white; }
+  .seat.third { background: var(--cream); color: var(--ink); }
+  .seat .roman {
+    font-family: 'Fraunces', serif; font-style: italic; font-weight: 400;
+    font-size: 80px; line-height: 0.85; letter-spacing: -0.05em;
+  }
+  .seat.first .roman { font-size: 120px; color: var(--crown); }
+  .seat.second .roman { color: rgba(255,255,255,0.85); }
+  .seat.third .roman { color: var(--blue); }
+  .seat .av {
+    width: 56px; height: 56px; border-radius: 999px; margin: 14px auto 12px;
+    background: rgba(255,255,255,0.18);
+    display: grid; place-items: center;
+    font-family: 'Fraunces', serif; font-weight: 600; font-size: 20px; letter-spacing: -0.02em;
+  }
+  .seat.first .av { width: 72px; height: 72px; font-size: 26px; background: rgba(212,160,23,0.2); color: var(--crown); }
+  .seat.third .av { background: rgba(16,21,79,0.1); color: var(--ink); }
+  .seat .nm { font-family: 'Fraunces', serif; font-weight: 600; font-size: 18px; letter-spacing: -0.015em; }
+  .seat.first .nm { font-size: 22px; }
+  .seat .pts {
+    font-family: 'Fraunces', serif; font-weight: 600;
+    font-size: 44px; letter-spacing: -0.035em; line-height: 1; margin-top: 14px; font-feature-settings: "tnum";
+  }
+  .seat.first .pts { font-size: 64px; }
+  .seat .pts span { font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.18em; text-transform: uppercase; opacity: 0.6; margin-left: 6px; vertical-align: 12px; }
+  .seat .meta { display: flex; gap: 12px; justify-content: center; margin-top: 14px; font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.1em; opacity: 0.75; text-transform: uppercase; }
+
+  .lb-table { margin-top: 0; border: 1px solid var(--ink); border-top: 0; background: var(--paper); }
+  .lb-row {
+    display: grid;
+    grid-template-columns: 70px 1fr 100px 140px 110px 80px;
+    gap: 18px;
+    align-items: center;
+    padding: 14px 22px;
+    border-bottom: 1px solid var(--line);
+    font-size: 13px;
+    transition: background 0.15s ease;
+  }
+  .lb-row:last-child { border-bottom: 0; }
+  .lb-row.head { background: transparent; padding: 12px 22px; font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); border-bottom: 1px solid var(--ink); }
+  .lb-row.head > div { text-align: left; }
+  .lb-row.head .e { text-align: right; }
+  .lb-row .rank { font-family: 'JetBrains Mono', monospace; font-weight: 600; color: var(--muted); display: flex; align-items: center; gap: 8px; }
+  .lb-row .rank .move { font-size: 10px; }
+  .move.up { color: var(--good); }
+  .move.down { color: var(--bad); }
+  .move.flat { color: var(--muted); }
+  .lb-row .who { display: flex; align-items: center; gap: 12px; }
+  .lb-row .who .av {
+    width: 32px; height: 32px; border-radius: 999px;
+    background: var(--ink); color: var(--paper);
+    display: grid; place-items: center;
+    font-family: 'Fraunces', serif; font-style: italic; font-weight: 600; font-size: 14px; letter-spacing: -0.02em;
+  }
+  .lb-row .who .nmwrap b { font-family: 'Fraunces', serif; font-weight: 600; font-size: 16px; letter-spacing: -0.015em; }
+  .lb-row .who .me-tag { color: var(--blue); font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.1em; margin-left: 6px; text-transform: uppercase; }
+  .lb-row .who .sub { display: block; font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--muted); letter-spacing: 0.04em; margin-top: 1px; }
+  .lb-row .pts { font-family: 'Fraunces', serif; font-weight: 600; font-size: 22px; letter-spacing: -0.025em; text-align: right; font-feature-settings: "tnum"; }
+  .lb-row .acc { display: flex; flex-direction: column; gap: 5px; align-items: flex-end; }
+  .lb-row .acc .pct { font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 600; }
+  .lb-row .acc .bar { width: 100px; height: 3px; background: var(--paper-deep); }
+  .lb-row .acc .fill { height: 100%; background: var(--blue); }
+  .lb-row .form { display: flex; gap: 4px; justify-content: flex-end; }
+  .lb-row .form span { width: 12px; height: 12px; display: inline-block; }
+  .lb-row .form span.W { background: var(--good); }
+  .lb-row .form span.L { background: var(--bad); opacity: 0.7; }
+  .lb-row .form span.D { background: var(--crown); opacity: 0.85; }
+  .lb-row .form span.empty { background: var(--paper-deep); }
+  .lb-row .week { text-align: right; font-family: 'JetBrains Mono', monospace; font-weight: 600; }
+  .lb-row.me { background: rgba(47,79,252,0.06); }
+  .lb-row.me::before {
+    content: ''; position: absolute;
+  }
+  .lb-row:not(.head):hover { background: rgba(255,255,255,0.5); }
+
+  /* ─── MATCHES ─── */
+  .matches-toolbar { display: flex; gap: 12px; }
+  .seg { display: flex; border: 1px solid var(--ink); }
+  .seg button {
+    background: transparent; border: 0; cursor: pointer;
+    padding: 10px 16px;
+    font-family: 'Space Grotesk', sans-serif; font-size: 10px; font-weight: 700;
+    letter-spacing: 0.18em; text-transform: uppercase;
+    color: var(--muted);
+    border-right: 1px solid var(--line);
+  }
+  .seg button:last-child { border-right: 0; }
+  .seg button.active { background: var(--ink); color: var(--paper); }
+
+  .stage-strip { display: flex; gap: 4px; flex-wrap: wrap; padding: 22px 0 4px; border-bottom: 1px solid var(--line); margin-bottom: 0; }
+  .stage-pill {
+    background: transparent; border: 1px solid var(--ink); cursor: pointer;
+    padding: 8px 14px;
+    font-family: 'Space Grotesk', sans-serif; font-size: 10px; font-weight: 700;
+    letter-spacing: 0.16em; text-transform: uppercase;
+    color: var(--ink);
+    display: inline-flex; align-items: center; gap: 8px;
+    transition: background 0.15s ease;
+  }
+  .stage-pill:hover { background: var(--paper-deep); }
+  .stage-pill.active { background: var(--ink); color: var(--paper); }
+  .stage-pill .ct { font-family: 'JetBrains Mono', monospace; font-size: 9px; padding: 1px 5px; background: var(--paper-deep); color: var(--ink); }
+  .stage-pill.active .ct { background: rgba(255,255,255,0.18); color: rgba(255,255,255,0.85); }
+
+  .group-block { margin-top: 28px; display: grid; grid-template-columns: 320px 1fr; gap: 24px; align-items: start; }
+  .group-table {
+    border: 1px solid var(--ink);
+  }
+  .group-table .h {
+    padding: 14px 18px 12px;
+    border-bottom: 1px solid var(--ink);
+    background: var(--ink); color: var(--paper);
+    display: flex; justify-content: space-between; align-items: baseline;
+  }
+  .group-table .h .ttl { font-family: 'Fraunces', serif; font-style: italic; font-weight: 400; font-size: 24px; letter-spacing: -0.01em; }
+  .group-table .h .meta { font-family: 'JetBrains Mono', monospace; font-size: 9px; letter-spacing: 0.18em; text-transform: uppercase; color: rgba(255,255,255,0.55); }
+  .group-table table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .group-table th { font-family: 'JetBrains Mono', monospace; font-size: 9px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); padding: 10px 18px 8px; text-align: left; border-bottom: 1px solid var(--line); }
+  .group-table th.r { text-align: right; }
+  .group-table td { padding: 10px 18px; border-bottom: 1px solid var(--line); }
+  .group-table tr:last-child td { border-bottom: 0; }
+  .group-table td.team { display: flex; align-items: center; gap: 10px; font-family: 'Fraunces', serif; font-weight: 600; font-size: 14px; letter-spacing: -0.01em; }
+  .group-table td.team .flag { width: 22px; height: 22px; border-radius: 4px; box-shadow: inset 0 0 0 1px var(--paper); }
+  .group-table tr.qual td.team { color: var(--ink); }
+  .group-table tr.qual td:first-child::before { content: ''; display: inline-block; width: 3px; height: 22px; background: var(--blue); margin-right: 6px; vertical-align: -6px; }
+  .group-table td.r { text-align: right; font-family: 'JetBrains Mono', monospace; }
+  .group-table td.pts { font-family: 'Fraunces', serif; font-weight: 600; font-size: 18px; }
+  .group-table td.rank { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted); }
+
+  .match-list { display: flex; flex-direction: column; }
+  .match-line {
+    display: grid;
+    grid-template-columns: 90px minmax(0,1fr) 90px minmax(0,1fr) 90px;
+    gap: 12px;
+    align-items: center;
+    padding: 14px 6px;
+    border-bottom: 1px solid var(--line);
+    transition: background 0.15s ease;
+    min-width: 0;
+  }
+  .match-line .home, .match-line .away { min-width: 0; }
+  .match-line .home > div, .match-line .away > div { min-width: 0; overflow: hidden; }
+  .match-line .home .name, .match-line .away .name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .match-list { min-width: 0; overflow: hidden; }
+  .group-block { min-width: 0; }
+  .match-line:hover { background: rgba(255,255,255,0.5); }
+  .match-line:last-child { border-bottom: 0; }
+  .match-line.live { background: rgba(47,79,252,0.06); border-left: 3px solid var(--blue); padding-left: 14px; }
+  .match-line .when { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase; }
+  .match-line .when b { display: block; font-family: 'Fraunces', serif; font-style: italic; font-weight: 600; font-size: 16px; letter-spacing: -0.01em; color: var(--ink); margin-bottom: 2px; text-transform: none; }
+  .match-line .home, .match-line .away { display: flex; align-items: center; gap: 12px; min-width: 0; }
+  .match-line .away { flex-direction: row-reverse; text-align: right; }
+  .match-line .home .name, .match-line .away .name { font-family: 'Fraunces', serif; font-weight: 600; font-size: 16px; letter-spacing: -0.01em; }
+  .match-line .home .code, .match-line .away .code { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--muted); letter-spacing: 0.06em; }
+  .match-line .score {
+    text-align: center;
+    font-family: 'Fraunces', serif; font-weight: 600; font-size: 26px;
+    letter-spacing: -0.025em;
+  }
+  .match-line .score.upcoming { font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 500; color: var(--muted); letter-spacing: 0.18em; text-transform: uppercase; }
+  .match-line .score.live { color: var(--blue); }
+  .match-line .pred { text-align: right; }
+  .match-line .pred .pick {
+    font-family: 'JetBrains Mono', monospace; font-size: 9px;
+    padding: 4px 8px; letter-spacing: 0.12em; text-transform: uppercase;
+    border: 1px solid var(--ink); background: transparent; color: var(--ink); font-weight: 600;
+  }
+  .match-line .pred .pick.correct { background: var(--good); border-color: var(--good); color: white; }
+  .match-line .pred .pick.wrong { background: var(--bad); border-color: var(--bad); color: white; }
+  .match-line .pred .pick.live-tag { background: var(--blue); border-color: var(--blue); color: white; }
+  .match-line .pred .pick.empty { color: var(--muted); border-color: var(--line); border-style: dashed; }
+
+  /* flags - reuse from spec */
+  .flag.f-arg { background: linear-gradient(180deg,#75AADB 0 33%,#fff 33% 66%,#75AADB 66%); }
+  .flag.f-bra { background: #FEDF00; }
+  .flag.f-fra { background: linear-gradient(90deg,#0055A4 0 33%,#fff 33% 66%,#EF4135 66%); }
+  .flag.f-eng { background: #fff; position: relative; }
+  .flag.f-eng::before { content: ''; position: absolute; inset: 0; background: linear-gradient(0deg, transparent 40%, #C8102E 40% 60%, transparent 60%), linear-gradient(90deg, transparent 40%, #C8102E 40% 60%, transparent 60%); }
+  .flag.f-esp { background: linear-gradient(180deg,#C60B1E 0 25%,#FFC400 25% 75%,#C60B1E 75%); }
+  .flag.f-ger { background: linear-gradient(180deg,#000 0 33%,#DD0000 33% 66%,#FFCE00 66%); }
+  .flag.f-por { background: linear-gradient(90deg,#006600 0 40%,#FF0000 40%); }
+  .flag.f-ned { background: linear-gradient(180deg,#AE1C28 0 33%,#fff 33% 66%,#21468B 66%); }
+  .flag.f-bel { background: linear-gradient(90deg,#000 0 33%,#FAE042 33% 66%,#ED2939 66%); }
+  .flag.f-mex { background: linear-gradient(90deg,#006847 0 33%,#fff 33% 66%,#CE1126 66%); }
+  .flag.f-jpn { background: white; position: relative; }
+  .flag.f-jpn::after { content: ''; position: absolute; inset: 50% 50% 50% 50%; width: 35%; height: 35%; margin: -17.5% 0 0 -17.5%; background: #BC002D; border-radius: 50%; }
+  .flag.f-cro { background: linear-gradient(180deg,#FF0000 0 33%,#fff 33% 66%,#0093DD 66%); }
+  .flag.f-mar { background: #C1272D; }
+  .flag.f-uru { background: linear-gradient(0deg,#fff 50%,#7B68EE 50%); }
+  .flag.f-pol { background: linear-gradient(180deg,#fff 0 50%, #DC143C 50%); }
+
+  /* fade-in transitions for screen swaps */
+  .screen { animation: rise 0.45s cubic-bezier(.2,.7,.2,1) both; }
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* small saved-toast */
+  .toast {
+    position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%);
+    background: var(--good); color: white;
+    padding: 12px 22px;
+    font-family: 'Space Grotesk', sans-serif; font-size: 12px; letter-spacing: 0.16em; text-transform: uppercase; font-weight: 700;
+    z-index: 100;
+    animation: rise 0.3s cubic-bezier(.2,.7,.2,1) both;
+  }
+
+  .footer-note {
+    margin-top: 64px;
+    padding-top: 22px;
+    border-top: 1px solid var(--ink);
+    display: flex; justify-content: space-between;
+    font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted);
+  }
+  .footer-note b { color: var(--ink); font-family: 'Fraunces', serif; font-style: italic; font-weight: 600; letter-spacing: -0.01em; text-transform: none; font-size: 14px; }
+
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel">
+const { useState, useMemo, useEffect } = React;
+
+// ─── DATA ───
+const TEAMS = {
+  ARG:{name:"Argentina",code:"ARG",flag:"f-arg"}, BRA:{name:"Brazil",code:"BRA",flag:"f-bra"},
+  FRA:{name:"France",code:"FRA",flag:"f-fra"},  ENG:{name:"England",code:"ENG",flag:"f-eng"},
+  ESP:{name:"Spain",code:"ESP",flag:"f-esp"},   GER:{name:"Germany",code:"GER",flag:"f-ger"},
+  POR:{name:"Portugal",code:"POR",flag:"f-por"},NED:{name:"Netherlands",code:"NED",flag:"f-ned"},
+  BEL:{name:"Belgium",code:"BEL",flag:"f-bel"}, MEX:{name:"Mexico",code:"MEX",flag:"f-mex"},
+  JPN:{name:"Japan",code:"JPN",flag:"f-jpn"},   CRO:{name:"Croatia",code:"CRO",flag:"f-cro"},
+  MAR:{name:"Morocco",code:"MAR",flag:"f-mar"}, URU:{name:"Uruguay",code:"URU",flag:"f-uru"},
+  POL:{name:"Poland",code:"POL",flag:"f-pol"}
+};
+
+const PRED_MATCHES = [
+  { id:1, day:"Wednesday", date:"25 June", time:"17:00", stage:"RO32", home:"FRA", away:"POR", crowd:{home:58,draw:12,away:30}, saved:null, status:"open", fact:"Against the grain by 16%" },
+  { id:2, day:"Wednesday", date:"25 June", time:"20:30", stage:"RO32", home:"ENG", away:"BRA", crowd:{home:41,draw:22,away:37}, saved:"away", status:"open", savedAt:"14m ago" },
+  { id:3, day:"Wednesday", date:"25 June", time:"23:00", stage:"RO32", home:"GER", away:"JPN", crowd:{home:52,draw:18,away:30}, saved:null, status:"open", lockIn:"02h 14m" },
+  { id:4, day:"Thursday",  date:"26 June", time:"17:00", stage:"RO32", home:"ESP", away:"NED", crowd:{home:46,draw:24,away:30}, saved:null, status:"open" },
+  { id:5, day:"Thursday",  date:"26 June", time:"20:30", stage:"RO32", home:"ARG", away:"MEX", crowd:{home:62,draw:14,away:24}, saved:"home", status:"open", savedAt:"1h ago" }
+];
+
+const LB = [
+  { rank:1,  name:"Ana R.",   av:"AR", pts:172, acc:82, form:["W","W","W","W","W"], delta:0,  move:"flat", you:false },
+  { rank:2,  name:"James K.", av:"JK", pts:158, acc:78, form:["W","W","L","W","W"], delta:8,  move:"up",   you:false },
+  { rank:3,  name:"Daniel M.",av:"DM", pts:151, acc:74, form:["W","D","W","W","L"], delta:-2, move:"down", you:false },
+  { rank:4,  name:"Sara H.",  av:"SH", pts:148, acc:76, form:["W","W","L","W","W"], delta:9,  move:"flat", you:false },
+  { rank:5,  name:"Maya O.",  av:"M",  pts:142, acc:71, form:["W","W","W","W","W"], delta:11, move:"up",   you:true },
+  { rank:6,  name:"Priya T.", av:"PT", pts:139, acc:68, form:["W","L","W","D","W"], delta:-2, move:"down", you:false },
+  { rank:7,  name:"Riley O.", av:"RO", pts:133, acc:65, form:["W","W","W","L","W"], delta:7,  move:"up",   you:false },
+  { rank:8,  name:"Theo C.",  av:"TC", pts:128, acc:62, form:["L","W","L","L","W"], delta:-6, move:"down", you:false },
+  { rank:9,  name:"Nadia A.", av:"NA", pts:124, acc:59, form:["W","L","W","W","D"], delta:4,  move:"up",   you:false },
+  { rank:10, name:"Eli L.",   av:"EL", pts:119, acc:57, form:["D","W","L","W","L"], delta:0,  move:"flat", you:false }
+];
+
+const GROUP_A = {
+  letter: "A",
+  played: 4,
+  total: 6,
+  table: [
+    { rank:1, team:"ARG", p:3, gd:5,  pts:9, qual:true },
+    { rank:2, team:"MEX", p:3, gd:1,  pts:6, qual:true },
+    { rank:3, team:"CRO", p:3, gd:-2, pts:3, qual:false },
+    { rank:4, team:"MAR", p:3, gd:-4, pts:0, qual:false }
+  ],
+  matches: [
+    { id:101, day:"Sat 14 Jun", time:"17:00", home:"ARG", away:"CRO", hs:2, as:1, status:"finished", pick:"home", correct:true },
+    { id:102, day:"Sun 15 Jun", time:"20:30", home:"MEX", away:"MAR", hs:3, as:1, status:"finished", pick:"home", correct:true },
+    { id:103, day:"Wed 18 Jun", time:"17:00", home:"ARG", away:"MAR", hs:2, as:0, status:"finished", pick:"home", correct:true },
+    { id:104, day:"Today",      time:"20:30", home:"CRO", away:"MEX", hs:1, as:1, status:"live", pick:"away" },
+    { id:105, day:"Sat 21 Jun", time:"17:00", home:"MEX", away:"ARG", status:"upcoming", pick:"away" },
+    { id:106, day:"Sat 21 Jun", time:"20:30", home:"MAR", away:"CRO", status:"upcoming", pick:null }
+  ]
+};
+const GROUP_B = {
+  letter: "B",
+  played: 3,
+  total: 6,
+  table: [
+    { rank:1, team:"FRA", p:2, gd:3,  pts:6, qual:true },
+    { rank:2, team:"ENG", p:2, gd:1,  pts:4, qual:true },
+    { rank:3, team:"NED", p:2, gd:-1, pts:1, qual:false },
+    { rank:4, team:"URU", p:2, gd:-3, pts:1, qual:false }
+  ],
+  matches: [
+    { id:201, day:"Sat 14 Jun", time:"23:00", home:"FRA", away:"URU", hs:2, as:0, status:"finished", pick:"home", correct:true },
+    { id:202, day:"Sun 15 Jun", time:"17:00", home:"ENG", away:"NED", hs:1, as:1, status:"finished", pick:"home", correct:false },
+    { id:203, day:"Wed 18 Jun", time:"20:30", home:"FRA", away:"ENG", status:"upcoming", pick:"home" }
+  ]
+};
+
+// ─── HELPERS ───
+const Flag = ({code, big}) => {
+  const cls = TEAMS[code]?.flag ?? "";
+  return <div className={`flag ${cls}`} style={big?{width:56,height:56}:undefined}></div>;
+};
+
+// ─── SCREENS ───
+
+function Dashboard({ onJump }) {
+  const [pick, setPick] = useState("home");
+  return (
+    <div className="screen">
+      <div className="page-head">
+        <div>
+          <div className="kicker">
+            <span className="num-label">DASH · 24 JUN 2026</span>
+            <span className="rule"></span>
+            <span className="num-label">OFFICE POOL · 24 PLAYERS</span>
+          </div>
+          <h1>Hi, Maya<i>.</i><br/>You're <i>fifth</i></h1>
+        </div>
+        <div className="right">
+          <p className="lede">Round of 16 picks open in two days &mdash; the board moves fast from here.</p>
+          <div className="meta">⌘ K · jump · ⌘ 1–4 · screens</div>
+        </div>
+      </div>
+
+      <div className="dash-grid">
+        <div className="countdown-block">
+          <div className="top">
+            <div className="eyebrow greet-eb">Tournament starts</div>
+            <div className="meta-line">▸ 11 JUN — 19 JUL · 104 MATCHES</div>
+          </div>
+          <div className="greet">The wait is <i>almost</i> over.</div>
+          <div className="number-row">
+            <div className="big num">34</div>
+            <div className="big-label">days<br/>to <b>kickoff</b></div>
+          </div>
+          <div className="foot">
+            <div className="stat"><div className="l">Picks made</div><div className="v">14<u>/104</u></div></div>
+            <div className="stat"><div className="l">This week</div><div className="v">72<u>%</u></div></div>
+            <div className="stat up"><div className="l">Δ Points</div><div className="v">+11</div></div>
+          </div>
+        </div>
+
+        <div className="next-pick">
+          <div className="h">
+            <div className="ttl">Your next pick</div>
+            <div className="live"><span style={{width:6,height:6,borderRadius:99,background:"var(--blue)",animation:"pulse 1.4s ease-in-out infinite"}}></span>1 / 6 OPEN</div>
+          </div>
+          <div className="matchup">
+            <div className="team-block">
+              <Flag code="ARG" big />
+              <div>
+                <div className="name">Argentina</div>
+                <div className="code">ARG · A1</div>
+              </div>
+            </div>
+            <div className="vs">
+              <div className="it">vs.</div>
+              <div className="when">Sat · 11 Jul</div>
+              <div className="stage-mini">Round of 16</div>
+            </div>
+            <div className="team-block">
+              <Flag code="MEX" big />
+              <div>
+                <div className="name">Mexico</div>
+                <div className="code">MEX · B2</div>
+              </div>
+            </div>
+          </div>
+          <div className="pick-row">
+            <button className={`opt ${pick==="home"?"picked":""}`} onClick={()=>setPick("home")}>
+              <span className="lbl">ARG</span><span className="pct">62%</span>
+            </button>
+            <button className={`opt ${pick==="draw"?"picked":""}`} onClick={()=>setPick("draw")}>
+              <span className="lbl">DRAW</span><span className="pct">14%</span>
+            </button>
+            <button className={`opt ${pick==="away"?"picked":""}`} onClick={()=>setPick("away")}>
+              <span className="lbl">MEX</span><span className="pct">24%</span>
+            </button>
+          </div>
+        </div>
+
+        <div className="stats-stack" style={{gridColumn:"2", gridRow:"1"}}>
+          <div className="stat-box feature">
+            <div>
+              <div className="label">Office rank</div>
+              <div className="value">#5<sup>th</sup></div>
+              <div className="sub">142 PTS · GAP TO 4TH: 6</div>
+            </div>
+            <div className="trend up">▲ 3</div>
+          </div>
+          <div className="stat-box">
+            <div>
+              <div className="label">Accuracy</div>
+              <div className="value">71<sup>%</sup></div>
+              <div className="sub">10 / 14 calls</div>
+            </div>
+            <div className="trend up">▲ 4</div>
+          </div>
+          <div className="stat-box">
+            <div>
+              <div className="label">Streak</div>
+              <div className="value"><i>5</i><sup>W</sup></div>
+              <div className="sub">last loss: ENG vs USA</div>
+            </div>
+            <div style={{display:"flex",gap:3}}>
+              {[0,1,2,3,4].map(i=><span key={i} style={{width:10,height:10,background:"var(--good)"}}></span>)}
+            </div>
+          </div>
+        </div>
+
+        <div className="timeline">
+          <div className="h">
+            <div className="t">Tournament <span className="it" style={{color:"var(--muted)"}}>arc</span></div>
+            <div className="legend">
+              <span><span className="dot" style={{background:"var(--ink)"}}></span>Locked</span>
+              <span><span className="dot" style={{background:"var(--blue)"}}></span>Open now</span>
+              <span><span className="dot" style={{background:"var(--paper-deep)"}}></span>Upcoming</span>
+            </div>
+          </div>
+          <div className="tl-row">
+            {[
+              {l:"Group A",w:"11 Jun",s:"done"},{l:"Group B",w:"14 Jun",s:"done"},
+              {l:"Group C",w:"18 Jun",s:"done"},{l:"Round of 32",w:"28 Jun · 6 picks",s:"live"},
+              {l:"Round of 16",w:"3 Jul",s:""},{l:"Quarters",w:"9 Jul",s:""},{l:"Final",w:"19 Jul",s:""}
+            ].map((s,i)=>(
+              <div key={i} className={`tl-step ${s.s}`} onClick={()=>onJump?.("predictions")}>
+                <div className="lbl">{s.l}</div>
+                <div className="when">{s.w}</div>
+                <div className="bar"></div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Predictions() {
+  const [picks, setPicks] = useState({ 1:{val:"home", draft:true}, 2:{val:"away", draft:false, savedAt:"14m ago"}, 5:{val:"home", draft:false, savedAt:"1h ago"} });
+  const [activeStage, setActiveStage] = useState("RO32");
+  const [activeDay, setActiveDay] = useState("Wednesday");
+  const [toast, setToast] = useState(null);
+
+  const setPick = (id, val) => {
+    setPicks(p => {
+      const cur = p[id];
+      if (cur && cur.val === val) {
+        const np = {...p};
+        if (cur.savedAt) np[id] = {...cur, draft: false};
+        else delete np[id];
+        return np;
+      }
+      return {...p, [id]: { ...(cur||{}), val, draft: true }};
+    });
+  };
+  const setScore = (id, side, n) => {
+    setPicks(p => {
+      const cur = p[id] || {};
+      const score = { ...(cur.score || {h:0,a:0}), [side]: n };
+      return { ...p, [id]: { ...cur, score, draft: true } };
+    });
+  };
+
+  const drafts = Object.values(picks).filter(p => p.draft).length;
+  const saved  = Object.values(picks).filter(p => p.savedAt && !p.draft).length;
+  const total  = PRED_MATCHES.length;
+  const completePct = ((saved + drafts) / total) * 100;
+
+  const save = () => {
+    setPicks(p => {
+      const np = {};
+      Object.entries(p).forEach(([k,v]) => { np[k] = { ...v, draft: false, savedAt: v.draft ? "just now" : v.savedAt }; });
+      return np;
+    });
+    setToast("Predictions saved");
+    setTimeout(()=>setToast(null), 2200);
+  };
+
+  const days = [
+    { dn:"Mon", dd:"23", complete:true, dots:["W","W","L"] },
+    { dn:"Tue", dd:"24", complete:true, dots:["W","W"] },
+    { dn:"Wed", dd:"25", count:"3 to pick", active: activeDay==="Wednesday", key:"Wednesday" },
+    { dn:"Thu", dd:"26", count:"2 to pick", active: activeDay==="Thursday",  key:"Thursday" },
+    { dn:"Fri", dd:"27", count:"3 to pick" },
+    { dn:"Sat", dd:"28", count:"2 to pick" },
+    { dn:"Sun", dd:"29", count:"2 to pick" },
+    { dn:"Mon", dd:"30", count:"2 to pick" }
+  ];
+
+  const visible = PRED_MATCHES.filter(m => m.day === activeDay);
+
+  return (
+    <div className="screen">
+      <div className="page-head">
+        <div>
+          <div className="kicker">
+            <span className="num-label">PRED · STAGE 4 OF 7</span>
+            <span className="rule"></span>
+            <span className="num-label">LOCKS IN 2D 14H</span>
+          </div>
+          <h1>Make your<br/><i>picks.</i></h1>
+        </div>
+        <div className="right">
+          <p className="lede">The Round of 32 unlocks your knockout bonus &mdash; ×2 multiplier on every correct call.</p>
+          <div className="meta">{drafts} unsaved · {saved} of {total} saved</div>
+        </div>
+      </div>
+
+      <div className="pred-progress">
+        <div className="num-bg num"><i>{saved+drafts}</i><span className="of">/</span><u>{total}</u></div>
+        <div className="info">
+          <div className="row1"><span>Picks complete</span><span>{Math.round(completePct)}%</span></div>
+          <div className="bar"><div className="fill" style={{width: completePct + "%"}}></div></div>
+        </div>
+      </div>
+
+      <div className="stage-tabs">
+        {[
+          {k:"GROUP", l:"Group", c:"48 / 48"}, {k:"RO32", l:"Round of 32", c:`${saved}/${total}`, live:true},
+          {k:"RO16", l:"Round of 16", c:"0/8"}, {k:"QF", l:"Quarters", c:"4"},
+          {k:"SF", l:"Semis", c:"2"}, {k:"FINAL", l:"Final", c:"1"}
+        ].map(t=>(
+          <button key={t.k} className={activeStage===t.k?"active":""} onClick={()=>setActiveStage(t.k)}>
+            {t.l}{t.live && <span className="dot" style={{width:5,height:5,borderRadius:99,background:"var(--blue)",animation:"pulse 1.4s ease-in-out infinite"}}></span>}
+            <span className="ct">{t.c}</span>
+          </button>
+        ))}
+      </div>
+
+      <div className="day-scrub">
+        {days.map((d,i)=>(
+          <div key={i}
+               className={`day ${d.active?"active":""} ${d.complete?"complete":""}`}
+               onClick={()=>{ if(d.key) setActiveDay(d.key); }}>
+            <div className="dn">{d.dn}</div>
+            <div className="dd">{d.dd}</div>
+            {d.complete
+              ? <div className="dot-row">{d.dots.map((c,j)=><span key={j} style={{background: c==="W"?"var(--good)":c==="L"?"var(--bad)":"var(--crown)", opacity:0.85}}></span>)}</div>
+              : <div className="ct">{d.count}</div>}
+          </div>
+        ))}
+      </div>
+
+      <div className="day-section">
+        <div className="day-head">
+          <h3>{activeDay} <i>· {visible[0]?.date}</i></h3>
+          <div className="progress-mini">
+            <b>{visible.filter(m=>picks[m.id]).length}</b> / {visible.length} picked &nbsp;·&nbsp; locks {activeDay} 16:00
+          </div>
+        </div>
+
+        {visible.map(m => {
+          const p = picks[m.id];
+          const isDraft = p?.draft;
+          return (
+            <div key={m.id} className={`match-card ${isDraft?"draft":""}`}>
+              <div className="when">
+                <div className="time">{m.time.split(":")[0]}<i>:</i>{m.time.split(":")[1]}</div>
+                <div className="stage-tag">{m.stage}</div>
+                <div className="crowd-line">847 picks</div>
+              </div>
+              <div>
+                <div className="pick-grid">
+                  <button
+                    className={`pick-tile ${p?.val==="home"?"picked":""} ${isDraft && p?.val==="home"?"draft":""}`}
+                    onClick={()=>setPick(m.id, "home")}>
+                    <div className="top-row">
+                      <Flag code={m.home} />
+                      <div>
+                        <div className="nm">{TEAMS[m.home].name}</div>
+                        <div className="cd">{m.home}</div>
+                      </div>
+                    </div>
+                    <div className="crowd-bar">
+                      <span>HOME</span><b>{m.crowd.home}%</b>
+                    </div>
+                    <div className="crowd-track"><div className="crowd-fill" style={{width: m.crowd.home + "%"}}></div></div>
+                  </button>
+                  <button
+                    className={`pick-tile draw ${p?.val==="draw"?"picked":""} ${isDraft && p?.val==="draw"?"draft":""}`}
+                    onClick={()=>setPick(m.id, "draw")}>
+                    <div className="top-row">
+                      <div className="draw-mark">×</div>
+                      <div>
+                        <div className="nm">Draw</div>
+                        <div className="cd">DRW</div>
+                      </div>
+                    </div>
+                    <div className="crowd-bar">
+                      <span>DRAW</span><b>{m.crowd.draw}%</b>
+                    </div>
+                    <div className="crowd-track"><div className="crowd-fill" style={{width: m.crowd.draw + "%"}}></div></div>
+                  </button>
+                  <button
+                    className={`pick-tile ${p?.val==="away"?"picked":""} ${isDraft && p?.val==="away"?"draft":""}`}
+                    onClick={()=>setPick(m.id, "away")}>
+                    <div className="top-row">
+                      <Flag code={m.away} />
+                      <div>
+                        <div className="nm">{TEAMS[m.away].name}</div>
+                        <div className="cd">{m.away}</div>
+                      </div>
+                    </div>
+                    <div className="crowd-bar">
+                      <span>AWAY</span><b>{m.crowd.away}%</b>
+                    </div>
+                    <div className="crowd-track"><div className="crowd-fill" style={{width: m.crowd.away + "%"}}></div></div>
+                  </button>
+                </div>
+                {p?.val && (
+                  <div className={`score-picker ${p.draft?"draft":""}`}>
+                    <div className="sp-h">
+                      <span>Predict exact score <span className="pts">+5 PTS</span></span>
+                      <span className="preview">
+                        {p.score ? <>{TEAMS[m.home].code} {p.score.h}<span>–</span>{p.score.a} {TEAMS[m.away].code}</> : <span style={{fontFamily:"'JetBrains Mono', monospace",fontSize:'10px',fontStyle:'normal',color:'var(--muted)'}}>OPTIONAL · +2 FOR OUTCOME</span>}
+                      </span>
+                    </div>
+                    <div className="sp-row">
+                      <span className="lbl">{m.home}</span>
+                      <div className="nums">
+                        {[0,1,2,3,4,5,6].map(n=>(
+                          <button key={n} className={p.score?.h===n?"on":""} onClick={()=>setScore(m.id,"h",n)}>{n===6?"6+":n}</button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="sp-row">
+                      <span className="lbl">{m.away}</span>
+                      <div className="nums">
+                        {[0,1,2,3,4,5,6].map(n=>(
+                          <button key={n} className={p.score?.a===n?"on":""} onClick={()=>setScore(m.id,"a",n)}>{n===6?"6+":n}</button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+                <div className="match-foot">
+                  <span>
+                    {p?.draft && <span className="draft-tag">● DRAFT — NOT SAVED</span>}
+                    {!p?.draft && p?.savedAt && <span className="saved">✓ SAVED · {p.savedAt}</span>}
+                    {!p && <span>○ NO PICK YET</span>}
+                  </span>
+                  <span>
+                    {p?.val && <>{p.score ? <><b>+5 if right · +2 outcome</b></> : <>You picked <b>{p.val==="draw"?"Draw":TEAMS[p.val==="home"?m.home:m.away].code}</b> · +2 PTS</>}</>}
+                    {!p && m.lockIn && <>Locks in <b>{m.lockIn}</b></>}
+                  </span>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {(drafts > 0) && (
+        <div className="save-bar">
+          <div className="info">
+            <b>{drafts} unsaved {drafts===1?"pick":"picks"}</b>
+            <small>{saved}/{total} saved · ⌘ S to save</small>
+          </div>
+          <button onClick={save}>Save predictions</button>
+        </div>
+      )}
+
+      {toast && <div className="toast">✓ {toast}</div>}
+    </div>
+  );
+}
+
+function Leaderboard() {
+  const [filter, setFilter] = useState("Office");
+  const [photo, setPhoto] = useState(null);
+  const onPhoto = (e) => {
+    const f = e.target.files?.[0]; if (!f) return;
+    const r = new FileReader(); r.onload = () => setPhoto(r.result); r.readAsDataURL(f);
+  };
+  return (
+    <div className="screen">
+      <div className="page-head">
+        <div>
+          <div className="kicker">
+            <span className="num-label">LBD · 24 JUN 2026</span>
+            <span className="rule"></span>
+            <span className="num-label">10 OF 24 PLAYERS</span>
+          </div>
+          <h1>Who's<br/><i>topping</i> the office.</h1>
+        </div>
+        <div className="right">
+          <div className="lb-filter">
+            {["Office","Friends","Global","This week"].map(f=>(
+              <button key={f} className={filter===f?"active":""} onClick={()=>setFilter(f)}>{f}</button>
+            ))}
+          </div>
+          <div className="meta" style={{marginTop:14}}>Updated · 4 min ago</div>
+        </div>
+      </div>
+
+      <div className="podium">
+        <div className="seat second">
+          <div className="roman">II</div>
+          <div className="av">JK</div>
+          <div className="nm">James K.</div>
+          <div className="pts num">158<span>pts</span></div>
+          <div className="meta"><span>78% acc</span><span>▲ 2</span></div>
+        </div>
+        <div className="seat first">
+          <div className="roman">I</div>
+          <div className="av">AR</div>
+          <div className="nm">Ana R.</div>
+          <div className="pts num">172<span>pts</span></div>
+          <div className="meta"><span>82% acc</span><span>FLAT</span></div>
+        </div>
+        <div className="seat third">
+          <div className="roman">III</div>
+          <div className="av">DM</div>
+          <div className="nm">Daniel M.</div>
+          <div className="pts num">151<span>pts</span></div>
+          <div className="meta"><span>74% acc</span><span>▼ 1</span></div>
+        </div>
+      </div>
+
+      <div className="lb-table">
+        <div className="lb-row head">
+          <div>Rank</div><div>Player</div>
+          <div className="e">Points</div><div className="e">Accuracy</div>
+          <div className="e">Form / 5</div><div className="e">Δ Week</div>
+        </div>
+        {LB.slice(3).map(r=>(
+          <div key={r.rank} className={`lb-row ${r.you?"me":""}`}>
+            <div className="rank">
+              <span className="num">0{r.rank}</span>
+              <span className={`move ${r.move}`}>{r.move==="up"?`▲ ${Math.abs(r.delta>0?Math.floor(r.delta/4):1)}`:r.move==="down"?`▼ ${Math.abs(Math.floor(r.delta/4))||1}`:"─"}</span>
+            </div>
+            <div className="who">
+              <div className={`av ${r.you && photo ? "photo" : ""}`}>{r.you && photo ? <img src={photo} alt="" /> : r.av}</div>
+              <div className="nmwrap">
+                <div className="name-line">
+                  <b>{r.name}</b>
+                  {r.you && <span className="me-tag">you</span>}
+                  {r.you && (
+                    <label className="upload-pill">
+                      {photo ? "✓ Photo" : "↑ Add photo"}
+                      <input type="file" accept="image/*" onChange={onPhoto} />
+                    </label>
+                  )}
+                </div>
+                <span className="sub">{r.acc}% accurate · {r.pts} pts total</span>
+              </div>
+            </div>
+            <div className="pts num">{r.pts}</div>
+            <div className="acc">
+              <span className="pct">{r.acc}%</span>
+              <span className="bar"><span className="fill" style={{width: r.acc + "%"}}></span></span>
+            </div>
+            <div className="form">{r.form.map((c,i)=><span key={i} className={c}></span>)}</div>
+            <div className={`week ${r.delta>0?"":"" }`} style={{color: r.delta>0?"var(--good)":r.delta<0?"var(--bad)":"var(--muted)"}}>
+              {r.delta>0?"+":""}{r.delta}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function Matches() {
+  const [view, setView] = useState("List");
+  const [scope, setScope] = useState("All");
+  const [stage, setStage] = useState("Group");
+
+  const stages = [
+    { k:"Group", c:"48" }, { k:"Round of 32", c:"16" }, { k:"Round of 16", c:"8" },
+    { k:"Quarters", c:"4" }, { k:"Semis", c:"2" }, { k:"Third place", c:"1" }, { k:"Final", c:"1" }
+  ];
+
+  const renderGroup = (g) => (
+    <div className="group-block" key={g.letter}>
+      <div className="group-table">
+        <div className="h">
+          <div className="ttl">Group <i>{g.letter}</i></div>
+          <div className="meta">{g.played}/{g.total} played</div>
+        </div>
+        <table>
+          <thead>
+            <tr><th>#</th><th>Team</th><th className="r">P</th><th className="r">GD</th><th className="r">PTS</th></tr>
+          </thead>
+          <tbody>
+            {g.table.map(t=>(
+              <tr key={t.team} className={t.qual?"qual":""}>
+                <td className="rank">{t.rank}</td>
+                <td className="team"><Flag code={t.team} />{TEAMS[t.team].name}</td>
+                <td className="r">{t.p}</td>
+                <td className="r">{t.gd>0?"+"+t.gd:t.gd}</td>
+                <td className="r pts num">{t.pts}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="match-list">
+        {g.matches.map(m => {
+          const isLive = m.status === "live";
+          const isFinished = m.status === "finished";
+          const isUpcoming = m.status === "upcoming";
+          return (
+            <div key={m.id} className={`match-line ${isLive?"live":""}`}>
+              <div className="when"><b>{m.day}</b>{m.time}</div>
+              <div className="home">
+                <Flag code={m.home} />
+                <div>
+                  <div className="name">{TEAMS[m.home].name}</div>
+                  <div className="code">{m.home}</div>
+                </div>
+              </div>
+              <div className={`score num ${isUpcoming?"upcoming":""} ${isLive?"live":""}`}>
+                {isUpcoming ? "vs" : isLive ? `${m.hs}–${m.as}` : `${m.hs}–${m.as}`}
+              </div>
+              <div className="away">
+                <Flag code={m.away} />
+                <div>
+                  <div className="name">{TEAMS[m.away].name}</div>
+                  <div className="code">{m.away}</div>
+                </div>
+              </div>
+              <div className="pred">
+                {isFinished && m.pick && <span className={`pick ${m.correct?"correct":"wrong"}`}>{m.correct?"✓ +3":"✗  0"}</span>}
+                {isLive && <span className="pick live-tag">● 67'</span>}
+                {isUpcoming && m.pick && <span className="pick">{m.pick==="home"?m.home:m.away} (you)</span>}
+                {isUpcoming && !m.pick && <span className="pick empty">no pick</span>}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="screen">
+      <div className="page-head">
+        <div>
+          <div className="kicker">
+            <span className="num-label">MTC · 104 MATCHES</span>
+            <span className="rule"></span>
+            <span className="num-label">12 GROUPS · 7 STAGES</span>
+          </div>
+          <h1>All the<br/><i>matches.</i></h1>
+        </div>
+        <div className="right">
+          <div className="matches-toolbar">
+            <div className="seg">
+              {["List","Bracket","Calendar"].map(v=>(
+                <button key={v} className={view===v?"active":""} onClick={()=>setView(v)}>{v}</button>
+              ))}
+            </div>
+            <div className="seg">
+              {["All","My picks"].map(v=>(
+                <button key={v} className={scope===v?"active":""} onClick={()=>setScope(v)}>{v}</button>
+              ))}
+            </div>
+          </div>
+          <div className="meta" style={{marginTop:14}}>1 LIVE · 4 PLAYED · 99 UPCOMING</div>
+        </div>
+      </div>
+
+      <div className="stage-strip">
+        {stages.map(s=>(
+          <button key={s.k} className={`stage-pill ${stage===s.k?"active":""}`} onClick={()=>setStage(s.k)}>
+            {s.k}<span className="ct">{s.c}</span>
+          </button>
+        ))}
+      </div>
+
+      {view === "List" && (<>{renderGroup(GROUP_A)}{renderGroup(GROUP_B)}</>)}
+
+      {view === "Bracket" && (
+        <div className="alt-view">
+          <h3>Knockout <i>bracket.</i></h3>
+          <p>Sixteen teams, five rounds, one trophy. Teams populate as the group stage finalises &mdash; your picks carry through.</p>
+          <div className="bracket-grid">
+            <div><div className="bracket-col-h">Round of 16</div>
+              <div className="bracket-col">
+                {["Argentina","Belgium","France","Spain","Brazil","Germany","Portugal","Netherlands"].map(t=>(
+                  <div key={t} className="br-slot">{t}<span className="pts-mini">+5</span></div>
+                ))}
+              </div>
+            </div>
+            <div><div className="bracket-col-h">Quarter-finals</div>
+              <div className="bracket-col">
+                {["Argentina","France","Brazil","Portugal"].map(t=>(
+                  <div key={t} className="br-slot">{t}<span className="pts-mini">+10</span></div>
+                ))}
+              </div>
+            </div>
+            <div><div className="bracket-col-h">Semi-finals</div>
+              <div className="bracket-col">
+                <div className="br-slot">Argentina<span className="pts-mini">+15</span></div>
+                <div className="br-slot tbd">TBD</div>
+              </div>
+            </div>
+            <div><div className="bracket-col-h">Final</div>
+              <div className="bracket-col"><div className="br-slot tbd">TBD vs TBD</div></div>
+            </div>
+            <div><div className="bracket-col-h">Champion</div>
+              <div className="bracket-col"><div className="br-slot br-final tbd" style={{color:'var(--crown)',fontStyle:'italic'}}>—</div></div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {view === "Calendar" && (
+        <div className="alt-view">
+          <h3>June · <i>2026.</i></h3>
+          <p>Match density at a glance. Group stage runs to the 25th; the round of 32 lights up the final week.</p>
+          <div className="cal-grid">
+            {["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].map(d=><div key={d} className="cal-h">{d}</div>)}
+            {[null,null,null,null,null,null,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30].map((d,i)=>{
+              const has = d !== null;
+              const matches = {11:"3",12:"3",13:"4",14:"4",15:"4",16:"3",17:"3",18:"4",19:"4",20:"4",21:"3",22:"2",23:"2",24:"2",25:"2",28:"2",29:"2",30:"2"};
+              const ko = [28,29,30].includes(d);
+              return <div key={i} className={`cal-c ${has?"has":""}`}>{has && <><div className="d">{d}</div>{matches[d] && <div className={`ev ${ko?"gold":""}`}>{matches[d]} {ko?"R32":"GRP"}</div>}</>}</div>;
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── ROOT ───
+function App() {
+  const [tab, setTab] = useState("dashboard");
+
+  useEffect(() => {
+    const h = (e) => {
+      if (e.metaKey || e.ctrlKey) {
+        if (e.key === "1") { setTab("dashboard"); e.preventDefault(); }
+        if (e.key === "2") { setTab("predictions"); e.preventDefault(); }
+        if (e.key === "3") { setTab("leaderboard"); e.preventDefault(); }
+        if (e.key === "4") { setTab("matches"); e.preventDefault(); }
+      }
+    };
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
+  }, []);
+
+  return (
+    <div className="app">
+      <div className="topbar">
+        <div className="brand">
+          <div className="mark"><img src="assets/logo-26.png" alt="FIFA 26" /></div>
+          <div className="title-wrap"><div className="title">Football Predictor</div><small style={{display:'block',fontFamily:"'Fraunces', serif",fontStyle:'italic',fontSize:'13px',color:'var(--muted)',marginTop:'2px',letterSpacing:'-0.005em'}}>Trivandi · Office Pool</small></div>
+        </div>
+        <nav className="topnav">
+          {[
+            {k:"dashboard",   l:"Dashboard"},
+            {k:"predictions", l:"Predictions", live: true},
+            {k:"leaderboard", l:"Leaderboard"},
+            {k:"matches",     l:"Matches"}
+          ].map(t=>(
+            <button key={t.k} className={tab===t.k?"active":""} onClick={()=>setTab(t.k)}>
+              {t.l}{t.live && <span className="dot"></span>}
+            </button>
+          ))}
+        </nav>
+        <div className="me">
+          <div className="lb">
+            <span>You · #5</span>
+            <b>142 pts</b>
+          </div>
+          <div className="av">M</div>
+        </div>
+      </div>
+
+      {tab === "dashboard"   && <Dashboard onJump={setTab} />}
+      {tab === "predictions" && <Predictions />}
+      {tab === "leaderboard" && <Leaderboard />}
+      {tab === "matches"     && <Matches />}
+
+      <div className="footer-note">
+        <span><b>Football Predictor</b> · v.next · 8 May 2026</span>
+        <span>⌘ 1–4 · switch screens · ⌘ S · save</span>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+
+</body>
+</html>
