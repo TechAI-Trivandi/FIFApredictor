@@ -14,6 +14,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Trash2, ShieldCheck, ShieldOff } from "lucide-react";
 
 interface UserProfile {
   id: string;
@@ -37,10 +38,15 @@ export default function AdminUsersPage() {
   const [message, setMessage] = useState("");
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [invitations, setInvitations] = useState<Invitation[]>([]);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const supabase = createClient();
 
   useEffect(() => {
     loadData();
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) setCurrentUserId(user.id);
+    });
   }, []);
 
   async function loadData() {
@@ -55,6 +61,44 @@ export default function AdminUsersPage() {
       .select("*")
       .order("created_at", { ascending: false });
     if (invitesData) setInvitations(invitesData);
+  }
+
+  async function handleDeleteUser(userId: string, displayName: string) {
+    if (!confirm(`Are you sure you want to delete "${displayName}"? This will remove all their predictions and cannot be undone.`)) return;
+    setActionLoading(userId);
+    setMessage("");
+    const res = await fetch("/api/admin/manage-user", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "delete", targetUserId: userId }),
+    });
+    const data = await res.json();
+    if (res.ok) {
+      setMessage(`User "${displayName}" deleted`);
+      loadData();
+    } else {
+      setMessage(`Failed: ${data.error}`);
+    }
+    setActionLoading(null);
+  }
+
+  async function handleToggleRole(userId: string, currentRole: string) {
+    const newRole = currentRole === "admin" ? "user" : "admin";
+    setActionLoading(userId);
+    setMessage("");
+    const res = await fetch("/api/admin/manage-user", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "change_role", targetUserId: userId, newRole }),
+    });
+    const data = await res.json();
+    if (res.ok) {
+      setMessage(`Role changed to ${newRole}`);
+      loadData();
+    } else {
+      setMessage(`Failed: ${data.error}`);
+    }
+    setActionLoading(null);
   }
 
   async function handleInvite(e: React.FormEvent) {
@@ -132,20 +176,56 @@ export default function AdminUsersPage() {
                 <TableHead>Name</TableHead>
                 <TableHead>Email</TableHead>
                 <TableHead>Role</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {users.map((user) => (
-                <TableRow key={user.id}>
-                  <TableCell>{user.display_name}</TableCell>
-                  <TableCell>{user.email}</TableCell>
-                  <TableCell>
-                    <Badge variant={user.role === "admin" ? "default" : "secondary"}>
-                      {user.role}
-                    </Badge>
-                  </TableCell>
-                </TableRow>
-              ))}
+              {users.map((u) => {
+                const isSelf = u.id === currentUserId;
+                const isLoading = actionLoading === u.id;
+                return (
+                  <TableRow key={u.id}>
+                    <TableCell>
+                      {u.display_name}
+                      {isSelf && <span className="text-xs text-gray-400 ml-1.5">(you)</span>}
+                    </TableCell>
+                    <TableCell>{u.email}</TableCell>
+                    <TableCell>
+                      <Badge variant={u.role === "admin" ? "default" : "secondary"}>
+                        {u.role}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-1.5">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-xs h-7 px-2"
+                          disabled={isLoading || isSelf}
+                          onClick={() => handleToggleRole(u.id, u.role)}
+                          title={u.role === "admin" ? "Demote to user" : "Promote to admin"}
+                        >
+                          {u.role === "admin" ? (
+                            <><ShieldOff className="h-3 w-3 mr-1" />Demote</>
+                          ) : (
+                            <><ShieldCheck className="h-3 w-3 mr-1" />Promote</>
+                          )}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-xs h-7 px-2 border-red-200 text-red-600 hover:bg-red-50"
+                          disabled={isLoading || isSelf}
+                          onClick={() => handleDeleteUser(u.id, u.display_name)}
+                        >
+                          <Trash2 className="h-3 w-3 mr-1" />
+                          Delete
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         </CardContent>

@@ -22,11 +22,46 @@ export async function POST(request: Request) {
 
   const { matchId, homeScore, awayScore, result, status } = await request.json();
 
-  if (matchId == null || homeScore == null || awayScore == null) {
-    return NextResponse.json({ error: "Missing fields" }, { status: 400 });
+  if (matchId == null) {
+    return NextResponse.json({ error: "Missing matchId" }, { status: 400 });
   }
 
   const adminClient = createAdminClient();
+
+  // If resetting to scheduled: clear scores, result, and zero out prediction points
+  if (status === "scheduled") {
+    const { error } = await adminClient
+      .from("matches")
+      .update({
+        home_score: null,
+        away_score: null,
+        result: null,
+        status: "scheduled",
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", matchId);
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    // Reset all prediction points for this match back to 0
+    await adminClient
+      .from("predictions")
+      .update({ points_awarded: 0 })
+      .eq("match_id", matchId);
+
+    // Refresh the leaderboard
+    await adminClient.rpc("refresh_leaderboard");
+
+    return NextResponse.json({ success: true, message: "Match reset to scheduled" });
+  }
+
+  // Normal score update — require scores
+  if (homeScore == null || awayScore == null) {
+    return NextResponse.json({ error: "Missing score fields" }, { status: 400 });
+  }
+
   const { error } = await adminClient
     .from("matches")
     .update({

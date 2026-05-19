@@ -195,20 +195,17 @@ export function PredictionsList({ matches, predictions, stageLocks, userId, crow
       .upsert(rows, { onConflict: "user_id,match_id" });
 
     if (!error) {
-      const ns = { ...savedPredictions };
-      for (const r of rows) {
-        const existing = ns[r.match_id];
-        ns[r.match_id] = {
-          id: existing?.id ?? 0,
-          user_id: userId,
-          match_id: r.match_id,
-          prediction: r.prediction,
-          score_home: r.score_home,
-          score_away: r.score_away,
-          points_awarded: existing?.points_awarded ?? 0,
-          created_at: existing?.created_at ?? new Date().toISOString(),
-        };
-      }
+      // Re-fetch predictions from server to get updated points_awarded
+      // (the DB trigger scores immediately if the match is already finished)
+      const { data: freshPredictions } = await supabase
+        .from("predictions")
+        .select("*")
+        .eq("user_id", userId);
+
+      const ns: Record<number, Prediction> = {};
+      freshPredictions?.forEach((p) => {
+        ns[p.match_id] = p;
+      });
       setSavedPredictions(ns);
       setDrafts({});
       setEditingIds(new Set());
