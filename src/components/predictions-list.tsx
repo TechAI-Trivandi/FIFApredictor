@@ -121,10 +121,14 @@ export function PredictionsList({ matches, predictions, stageLocks, userId, crow
   function getCurrentScore(matchId: number): { h: number | null; a: number | null } {
     const draft = drafts[matchId];
     if (draft && (draft.score_home != null || draft.score_away != null)) {
-      return { h: draft.score_home ?? null, a: draft.score_away ?? null };
+      return { h: draft.score_home ?? 0, a: draft.score_away ?? 0 };
     }
     const saved = savedPredictions[matchId];
-    return { h: saved?.score_home ?? null, a: saved?.score_away ?? null };
+    if (saved?.score_home != null || saved?.score_away != null) {
+      return { h: saved.score_home ?? 0, a: saved.score_away ?? 0 };
+    }
+    // Default to 0-0 for new predictions
+    return { h: 0, a: 0 };
   }
   function isDraft(matchId: number): boolean {
     return drafts[matchId] !== undefined;
@@ -136,8 +140,8 @@ export function PredictionsList({ matches, predictions, stageLocks, userId, crow
       const next = { ...prev };
       const cur = next[matchId] ?? {};
       const saved = savedPredictions[matchId];
-      const newHome = side === "h" ? n : cur.score_home ?? saved?.score_home ?? null;
-      const newAway = side === "a" ? n : cur.score_away ?? saved?.score_away ?? null;
+      const newHome = side === "h" ? n : cur.score_home ?? saved?.score_home ?? 0;
+      const newAway = side === "a" ? n : cur.score_away ?? saved?.score_away ?? 0;
 
       // Auto-derive outcome from score
       let prediction: PredictionChoice | undefined = cur.prediction ?? saved?.prediction;

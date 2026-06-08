@@ -19,13 +19,12 @@ export default async function LeaderboardPage() {
     .select("user_id, display_name, total_points, correct_predictions, total_predictions, rank, previous_rank, weekly_points")
     .order("rank", { ascending: true });
 
-  // Avatars
-  const userIds = (lbRaw ?? []).map((r) => r.user_id);
+  // Pull ALL profiles (including those not yet in leaderboard table)
   const { data: profilesData } = await supabase
     .from("profiles")
-    .select("id, avatar_url")
-    .in("id", userIds.length > 0 ? userIds : ["00000000-0000-0000-0000-000000000000"]);
+    .select("id, display_name, avatar_url");
   const avatarById = new Map((profilesData ?? []).map((p) => [p.id, p.avatar_url]));
+  const lbUserIds = new Set((lbRaw ?? []).map((r) => r.user_id));
 
   // Form data: last 5 scored predictions per user
   const { data: finishedMatches } = await supabase
@@ -56,7 +55,8 @@ export default async function LeaderboardPage() {
     formMap[uid] = preds.slice(0, 5).map((p) => p.points);
   }
 
-  const leaderboard: LeaderboardRow[] = (lbRaw ?? []).map((r) => ({
+  // Users already in leaderboard table
+  const ranked: LeaderboardRow[] = (lbRaw ?? []).map((r) => ({
     user_id: r.user_id,
     display_name: r.display_name,
     total_points: r.total_points,
@@ -70,9 +70,25 @@ export default async function LeaderboardPage() {
     updated_at: "",
   }));
 
-  const { count: totalPlayers } = await supabase
-    .from("profiles")
-    .select("*", { count: "exact", head: true });
+  // Users who signed up but aren't in the leaderboard table yet
+  const unranked: LeaderboardRow[] = (profilesData ?? [])
+    .filter((p) => !lbUserIds.has(p.id))
+    .map((p) => ({
+      user_id: p.id,
+      display_name: p.display_name ?? "Unknown",
+      total_points: 0,
+      correct_predictions: 0,
+      total_predictions: 0,
+      rank: ranked.length + 1, // tied last
+      previous_rank: null,
+      weekly_points: 0,
+      avatar_url: p.avatar_url ?? null,
+      form: [],
+      updated_at: "",
+    }));
+
+  const leaderboard = [...ranked, ...unranked];
+  const totalPlayers = leaderboard.length;
 
   return (
     <div>
@@ -85,7 +101,7 @@ export default async function LeaderboardPage() {
             </span>
             <span className="flex-1 h-px bg-line" />
             <span className="mono text-[11px] tracking-[0.12em] text-muted-warm uppercase">
-              {leaderboard.length} OF {totalPlayers ?? leaderboard.length} PLAYERS
+              {totalPlayers} PLAYERS
             </span>
           </div>
           <h1 className="display-heading text-[64px] sm:text-[88px] leading-[0.88] tracking-[-0.045em] text-ink">
