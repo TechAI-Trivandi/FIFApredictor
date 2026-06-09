@@ -22,6 +22,7 @@ interface UserProfile {
   display_name: string;
   role: string;
   created_at: string;
+  prediction_count?: number;
 }
 
 interface Invitation {
@@ -54,7 +55,25 @@ export default function AdminUsersPage() {
       .from("profiles")
       .select("*")
       .order("created_at", { ascending: false });
-    if (profilesData) setUsers(profilesData);
+
+    // Get prediction counts per user
+    const { data: predCounts } = await supabase
+      .from("predictions")
+      .select("user_id");
+
+    const countMap: Record<string, number> = {};
+    for (const p of predCounts ?? []) {
+      countMap[p.user_id] = (countMap[p.user_id] ?? 0) + 1;
+    }
+
+    if (profilesData) {
+      setUsers(
+        profilesData.map((u) => ({
+          ...u,
+          prediction_count: countMap[u.id] ?? 0,
+        }))
+      );
+    }
 
     const { data: invitesData } = await supabase
       .from("invitations")
@@ -175,6 +194,7 @@ export default function AdminUsersPage() {
               <TableRow>
                 <TableHead>Name</TableHead>
                 <TableHead>Email</TableHead>
+                <TableHead>Predictions</TableHead>
                 <TableHead>Role</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -190,6 +210,13 @@ export default function AdminUsersPage() {
                       {isSelf && <span className="text-xs text-gray-400 ml-1.5">(you)</span>}
                     </TableCell>
                     <TableCell>{u.email}</TableCell>
+                    <TableCell>
+                      {u.prediction_count === 0 ? (
+                        <span className="text-red-500 text-xs font-medium">None</span>
+                      ) : (
+                        <span className="text-xs font-medium">{u.prediction_count}</span>
+                      )}
+                    </TableCell>
                     <TableCell>
                       <Badge variant={u.role === "admin" ? "default" : "secondary"}>
                         {u.role}

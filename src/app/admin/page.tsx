@@ -18,6 +18,13 @@ export default function AdminPage() {
   const [stageLocks, setStageLocks] = useState<StageLock[]>([]);
   const [userCount, setUserCount] = useState(0);
   const [finishedCount, setFinishedCount] = useState(0);
+  const [predictionStats, setPredictionStats] = useState<{
+    totalPredictions: number;
+    usersWithPredictions: number;
+    usersWithoutPredictions: number;
+    avgPerUser: number;
+    recentPredictions: { display_name: string; count: number }[];
+  }>({ totalPredictions: 0, usersWithPredictions: 0, usersWithoutPredictions: 0, avgPerUser: 0, recentPredictions: [] });
   const [syncStatus, setSyncStatus] = useState<string | null>(null);
   const [syncing, setSyncing] = useState<string | null>(null);
   const supabase = createClient();
@@ -38,6 +45,34 @@ export default function AdminPage() {
 
     const { count: finished } = await supabase.from("matches").select("*", { count: "exact", head: true }).eq("status", "finished");
     setFinishedCount(finished ?? 0);
+
+    // Prediction insights
+    const { data: allProfiles } = await supabase.from("profiles").select("id, display_name");
+    const { data: allPredictions } = await supabase.from("predictions").select("user_id");
+
+    const predCountByUser: Record<string, number> = {};
+    for (const p of allPredictions ?? []) {
+      predCountByUser[p.user_id] = (predCountByUser[p.user_id] ?? 0) + 1;
+    }
+
+    const profiles = allProfiles ?? [];
+    const withPreds = profiles.filter((p) => (predCountByUser[p.id] ?? 0) > 0);
+    const withoutPreds = profiles.filter((p) => (predCountByUser[p.id] ?? 0) === 0);
+    const totalPreds = allPredictions?.length ?? 0;
+
+    // Top predictors (most predictions)
+    const ranked = profiles
+      .map((p) => ({ display_name: p.display_name, count: predCountByUser[p.id] ?? 0 }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 50);
+
+    setPredictionStats({
+      totalPredictions: totalPreds,
+      usersWithPredictions: withPreds.length,
+      usersWithoutPredictions: withoutPreds.length,
+      avgPerUser: profiles.length > 0 ? Math.round(totalPreds / profiles.length) : 0,
+      recentPredictions: ranked,
+    });
   }
 
   async function toggleStage(stage: string, field: "locked" | "predictions_open", value: boolean) {
@@ -104,6 +139,81 @@ export default function AdminPage() {
             </CardContent>
           </Card>
         </Link>
+      </div>
+
+      {/* Prediction Insights */}
+      <div>
+        <h2 className="text-sm font-bold uppercase tracking-wider text-gray-500 mb-3">
+          Prediction Insights
+        </h2>
+        <div className="grid gap-4 sm:grid-cols-4 mb-4">
+          <Card className="border-gray-200">
+            <CardContent className="p-5">
+              <div className="text-xs uppercase tracking-wider text-gray-500 font-medium">Total Predictions</div>
+              <div className="text-3xl font-bold text-gray-900 mt-2">{predictionStats.totalPredictions}</div>
+              <p className="text-xs text-gray-500 mt-1">across all users</p>
+            </CardContent>
+          </Card>
+          <Card className="border-gray-200">
+            <CardContent className="p-5">
+              <div className="text-xs uppercase tracking-wider text-gray-500 font-medium">Predicted</div>
+              <div className="text-3xl font-bold text-green-700 mt-2">{predictionStats.usersWithPredictions}</div>
+              <p className="text-xs text-gray-500 mt-1">users have made picks</p>
+            </CardContent>
+          </Card>
+          <Card className="border-gray-200">
+            <CardContent className="p-5">
+              <div className="text-xs uppercase tracking-wider text-gray-500 font-medium">Not Predicted</div>
+              <div className="text-3xl font-bold text-red-600 mt-2">{predictionStats.usersWithoutPredictions}</div>
+              <p className="text-xs text-gray-500 mt-1">users with no picks yet</p>
+            </CardContent>
+          </Card>
+          <Card className="border-gray-200">
+            <CardContent className="p-5">
+              <div className="text-xs uppercase tracking-wider text-gray-500 font-medium">Avg Per User</div>
+              <div className="text-3xl font-bold text-gray-900 mt-2">{predictionStats.avgPerUser}</div>
+              <p className="text-xs text-gray-500 mt-1">predictions each</p>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Top predictors */}
+        {predictionStats.recentPredictions.length > 0 && (
+          <Card className="border-gray-200">
+            <CardContent className="p-0">
+              <div className="px-5 py-3 border-b border-gray-100">
+                <span className="text-xs font-bold uppercase tracking-wider text-gray-500">
+                  Predictions by Player
+                </span>
+              </div>
+              <div className="divide-y divide-gray-100">
+                {predictionStats.recentPredictions.map((p, i) => (
+                  <div key={i} className="flex items-center justify-between px-5 py-2.5">
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs text-gray-400 font-mono w-5">{i + 1}.</span>
+                      <span className="text-sm font-medium text-gray-900">{p.display_name}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-24 h-1.5 bg-gray-100 overflow-hidden">
+                        <div
+                          className="h-full bg-gray-900 transition-all"
+                          style={{
+                            width: `${predictionStats.recentPredictions[0].count > 0
+                              ? (p.count / predictionStats.recentPredictions[0].count) * 100
+                              : 0}%`,
+                          }}
+                        />
+                      </div>
+                      <span className={`text-xs font-bold mono ${p.count === 0 ? "text-red-500" : "text-gray-700"}`}>
+                        {p.count}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       {/* Stage Lock Controls */}
