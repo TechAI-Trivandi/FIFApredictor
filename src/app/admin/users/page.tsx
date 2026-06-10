@@ -56,15 +56,12 @@ export default function AdminUsersPage() {
       .select("*")
       .order("created_at", { ascending: false });
 
-    // Get prediction counts per user
-    const { data: predCounts } = await supabase
-      .from("predictions")
-      .select("user_id")
-      .range(0, 9999);
-
-    const countMap: Record<string, number> = {};
-    for (const p of predCounts ?? []) {
-      countMap[p.user_id] = (countMap[p.user_id] ?? 0) + 1;
+    // Get prediction counts via server API (avoids client row limits)
+    let countMap: Record<string, number> = {};
+    const insightsRes = await fetch("/api/admin/prediction-insights");
+    if (insightsRes.ok) {
+      const insights = await insightsRes.json();
+      countMap = insights.countByUserId ?? {};
     }
 
     if (profilesData) {

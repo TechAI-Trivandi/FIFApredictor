@@ -46,33 +46,12 @@ export default function AdminPage() {
     const { count: finished } = await supabase.from("matches").select("*", { count: "exact", head: true }).eq("status", "finished");
     setFinishedCount(finished ?? 0);
 
-    // Prediction insights
-    const { data: allProfiles } = await supabase.from("profiles").select("id, display_name");
-    const { data: allPredictions } = await supabase.from("predictions").select("user_id").range(0, 9999);
-
-    const predCountByUser: Record<string, number> = {};
-    for (const p of allPredictions ?? []) {
-      predCountByUser[p.user_id] = (predCountByUser[p.user_id] ?? 0) + 1;
+    // Prediction insights — use API route to avoid client-side row limits
+    const insightsRes = await fetch("/api/admin/prediction-insights");
+    if (insightsRes.ok) {
+      const insights = await insightsRes.json();
+      setPredictionStats(insights);
     }
-
-    const profiles = allProfiles ?? [];
-    const withPreds = profiles.filter((p) => (predCountByUser[p.id] ?? 0) > 0);
-    const withoutPreds = profiles.filter((p) => (predCountByUser[p.id] ?? 0) === 0);
-    const totalPreds = allPredictions?.length ?? 0;
-
-    // Top predictors (most predictions)
-    const ranked = profiles
-      .map((p) => ({ display_name: p.display_name, count: predCountByUser[p.id] ?? 0 }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 50);
-
-    setPredictionStats({
-      totalPredictions: totalPreds,
-      usersWithPredictions: withPreds.length,
-      usersWithoutPredictions: withoutPreds.length,
-      avgPerUser: profiles.length > 0 ? Math.round(totalPreds / profiles.length) : 0,
-      recentPredictions: ranked,
-    });
   }
 
   async function toggleStage(stage: string, field: "locked" | "predictions_open", value: boolean) {
