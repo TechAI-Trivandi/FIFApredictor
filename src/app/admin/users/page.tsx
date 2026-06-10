@@ -59,7 +59,8 @@ export default function AdminUsersPage() {
     // Get prediction counts per user
     const { data: predCounts } = await supabase
       .from("predictions")
-      .select("user_id");
+      .select("user_id")
+      .range(0, 9999);
 
     const countMap: Record<string, number> = {};
     for (const p of predCounts ?? []) {

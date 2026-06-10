@@ -48,7 +48,7 @@ export default function AdminPage() {
 
     // Prediction insights
     const { data: allProfiles } = await supabase.from("profiles").select("id, display_name");
-    const { data: allPredictions } = await supabase.from("predictions").select("user_id");
+    const { data: allPredictions } = await supabase.from("predictions").select("user_id").range(0, 9999);
 
     const predCountByUser: Record<string, number> = {};
     for (const p of allPredictions ?? []) {

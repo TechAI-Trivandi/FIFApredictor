@@ -38,7 +38,8 @@ export default async function LeaderboardPage() {
 
   const { data: allPreds } = await supabase
     .from("predictions")
-    .select("user_id, match_id, points_awarded");
+    .select("user_id, match_id, points_awarded")
+    .range(0, 9999);
 
   // Group predictions by user, sorted by most-recent match first
   const formMap: Record<string, number[]> = {};
