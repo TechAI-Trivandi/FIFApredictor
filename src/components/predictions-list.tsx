@@ -428,8 +428,8 @@ export function PredictionsList({ matches, predictions, stageLocks, userId, crow
               const saved = savedPredictions[m.id];
               const savedComplete = hasSavedScore(saved);
               const editing = editingIds.has(m.id);
-              const matchLocked = isMatchLocked(m.kickoff_at);
-              const canPredict = stageOpen && m.home_team_id && m.away_team_id && !matchLocked;
+              const matchLocked = stageOpen ? false : isMatchLocked(m.kickoff_at);
+              const canPredict = stageOpen && m.home_team_id && m.away_team_id;
               const showPicker = canPredict && (!savedComplete || editing || draft);
               const showSaved = savedComplete && !editing && !draft;
 
