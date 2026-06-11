@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import Image from "next/image";
 import { format } from "date-fns";
 import { AvatarUpload } from "@/components/leaderboard/avatar-upload";
+import { PlayerAvatar } from "@/components/leaderboard/player-popup";
 import type { LeaderboardEntry } from "@/lib/types";
 
 interface LeaderboardRow extends LeaderboardEntry {
@@ -194,21 +195,11 @@ export default async function LeaderboardPage() {
 
                 {/* Player */}
                 <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
-                  {r.avatar_url ? (
-                    <div className="w-8 h-8 rounded-full overflow-hidden border border-paper shrink-0">
-                      <Image
-                        src={r.avatar_url}
-                        alt={r.display_name}
-                        width={32}
-                        height={32}
-                        className="object-cover w-full h-full"
-                      />
-                    </div>
-                  ) : (
-                    <div className="w-8 h-8 rounded-full bg-ink text-paper grid place-items-center serif italic font-semibold text-[14px] tracking-[-0.02em] shrink-0">
-                      {initial}
-                    </div>
-                  )}
+                  <PlayerAvatar
+                    player={r}
+                    size={32}
+                    className="border border-paper"
+                  />
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="serif font-semibold text-[15px] sm:text-[16px] tracking-[-0.015em] text-ink truncate">
@@ -310,23 +301,14 @@ function PodiumSeat({
       <div className={`serif italic font-normal leading-[0.85] tracking-[-0.05em] ${romanCls}`}>
         {romanMap[place]}
       </div>
-      {entry.avatar_url ? (
-        <div className={`mx-auto rounded-full overflow-hidden mt-3.5 mb-3 ${avatarBorder} ${
-          place === 1 ? "w-[78px] h-[78px]" : "w-[62px] h-[62px]"
-        }`}>
-          <Image
-            src={entry.avatar_url}
-            alt={entry.display_name}
-            width={place === 1 ? 78 : 62}
-            height={place === 1 ? 78 : 62}
-            className="object-cover w-full h-full"
-          />
-        </div>
-      ) : (
-        <div className={`mx-auto rounded-full mt-3.5 mb-3 grid place-items-center serif font-semibold tracking-[-0.02em] ${initialsStyle}`}>
-          {initial}
-        </div>
-      )}
+      <div className="flex justify-center mt-3.5 mb-3">
+        <PlayerAvatar
+          player={entry}
+          size={place === 1 ? 78 : 62}
+          className={avatarBorder}
+          initialsBg="bg-white/20 text-white"
+        />
+      </div>
       <div className={`serif font-semibold tracking-[-0.015em] ${
         place === 1 ? "text-[22px]" : "text-[18px]"
       }`}>
