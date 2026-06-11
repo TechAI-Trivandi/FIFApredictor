@@ -61,5 +61,12 @@ export async function updateSession(request: NextRequest) {
     }
   }
 
+  // Never let the browser/CDN serve a stale page document. The app's data
+  // (leaderboard, scores, predictions) changes constantly, so these dynamic
+  // pages must always be refetched. `no-store` also makes them ineligible for
+  // the browser's back/forward cache — no more needing a hard refresh/incognito.
+  // (Static assets are excluded from this middleware by the matcher in middleware.ts.)
+  supabaseResponse.headers.set("Cache-Control", "no-store, must-revalidate");
+
   return supabaseResponse;
 }
