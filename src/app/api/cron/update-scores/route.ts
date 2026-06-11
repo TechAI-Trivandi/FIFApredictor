@@ -56,10 +56,25 @@ export async function GET(request: Request) {
     const awayGoals = fixture.score?.fullTime?.away;
 
     if (status === "FINISHED") {
-      let result: "home" | "away" | "draw";
-      if (fixture.score.winner === "HOME_TEAM") result = "home";
-      else if (fixture.score.winner === "AWAY_TEAM") result = "away";
-      else result = "draw";
+      // Guard: never finalize a match without real numeric scores.
+      // The API can report FINISHED with null fullTime scores (incomplete
+      // data, postponed/abandoned fixtures). Writing that breaks scoring —
+      // the DB trigger requires non-null scores, so it silently awards nothing.
+      if (typeof homeGoals !== "number" || typeof awayGoals !== "number") {
+        // Mark it live so it's still polled, but don't finalize yet.
+        if (match.status !== "live") {
+          await supabase
+            .from("matches")
+            .update({ status: "live", updated_at: new Date().toISOString() })
+            .eq("id", match.id);
+        }
+        continue;
+      }
+
+      // Derive the result from the actual scoreline so result and score
+      // can never disagree (don't rely on the API's winner field).
+      const result: "home" | "away" | "draw" =
+        homeGoals > awayGoals ? "home" : awayGoals > homeGoals ? "away" : "draw";
 
       await supabase
         .from("matches")

@@ -76,10 +76,22 @@ export async function POST(request: Request) {
     const awayGoals = fixture.score?.fullTime?.away;
 
     if (status === "FINISHED") {
-      let result: "home" | "away" | "draw";
-      if (fixture.score.winner === "HOME_TEAM") result = "home";
-      else if (fixture.score.winner === "AWAY_TEAM") result = "away";
-      else result = "draw";
+      // Guard: never finalize a match without real numeric scores.
+      // A FINISHED status with null fullTime scores would break scoring —
+      // the DB trigger requires non-null scores and silently awards nothing.
+      if (typeof homeGoals !== "number" || typeof awayGoals !== "number") {
+        if (match.status !== "live") {
+          await adminClient
+            .from("matches")
+            .update({ status: "live", updated_at: new Date().toISOString() })
+            .eq("id", match.id);
+        }
+        continue;
+      }
+
+      // Derive result from the actual scoreline so they can never disagree.
+      const result: "home" | "away" | "draw" =
+        homeGoals > awayGoals ? "home" : awayGoals > homeGoals ? "away" : "draw";
 
       await adminClient
         .from("matches")

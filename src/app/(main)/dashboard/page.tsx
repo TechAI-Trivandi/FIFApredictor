@@ -121,9 +121,33 @@ export default async function DashboardPage() {
     Math.ceil((TOURNAMENT_START.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
   );
 
+  // Tournament progress — which stage is being played, and what's next
+  const nowMs = Date.now();
+  const stageFlow = STAGE_ORDER.filter((s) => s !== "third_place");
+  const startedStages = stageFlow.filter(
+    (s) => stageEarliestKickoff[s] && new Date(stageEarliestKickoff[s]!).getTime() <= nowMs
+  );
+  const currentStage = startedStages[startedStages.length - 1] ?? stageFlow[0];
+  const upcomingStages = stageFlow.filter(
+    (s) => stageEarliestKickoff[s] && new Date(stageEarliestKickoff[s]!).getTime() > nowMs
+  );
+  const nextStage = upcomingStages[0] ?? null;
+  const daysToNextStage = nextStage
+    ? Math.max(0, Math.ceil((new Date(stageEarliestKickoff[nextStage]!).getTime() - nowMs) / 86400000))
+    : 0;
+  const tournamentLive = startedStages.length > 0 || daysToStart === 0;
+
+  // Accuracy = correct results / matches actually decided (finished), NOT total picks.
+  // Dividing by all 72 picks made "got 1 of 1 right" show as ~1%.
+  const { count: decidedCount } = await supabase
+    .from("predictions")
+    .select("id, match:matches!inner(status)", { count: "exact", head: true })
+    .eq("user_id", user!.id)
+    .eq("match.status", "finished");
+
   const accuracy =
-    myRank && myRank.total_predictions > 0
-      ? Math.round((myRank.correct_predictions / myRank.total_predictions) * 100)
+    myRank && decidedCount && decidedCount > 0
+      ? Math.round((myRank.correct_predictions / decidedCount) * 100)
       : null;
 
   const ordinalRank = myRank ? ordinal(myRank.rank) : null;
@@ -251,28 +275,61 @@ export default async function DashboardPage() {
           <div className="relative">
             <div className="flex justify-between items-start">
               <span className="mono text-[10px] tracking-[0.22em] uppercase font-bold text-blue-bright">
-                Tournament starts
+                {tournamentLive ? (
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="w-[7px] h-[7px] rounded-full bg-blue-bright pulse-dot" />
+                    Tournament · Live
+                  </span>
+                ) : (
+                  "Tournament starts"
+                )}
               </span>
               <span className="mono text-[10px] tracking-[0.18em] uppercase text-paper/40">
                 ▸ 11 JUN — 19 JUL · 104 MATCHES
               </span>
             </div>
-            <div className="serif font-semibold text-[38px] tracking-[-0.025em] leading-none mt-3.5">
-              {daysToStart === 0 ? (
-                <>It&apos;s <i className="text-blue-bright">live</i>.</>
-              ) : (
-                <>The wait is <i className="text-blue-bright">almost</i> over.</>
-              )}
-            </div>
-            <div className="mt-5 flex items-end gap-3.5">
-              <span className="serif font-semibold text-[180px] sm:text-[220px] tracking-[-0.07em] leading-[0.78] num">
-                {daysToStart}
-              </span>
-              <div className="pb-3.5 mono text-[11px] tracking-[0.18em] uppercase text-paper/55 leading-[1.4] max-w-[96px]">
-                days<br />
-                to <b className="text-paper font-medium">kickoff</b>
-              </div>
-            </div>
+
+            {tournamentLive ? (
+              <>
+                <div className="serif font-semibold text-[38px] tracking-[-0.025em] leading-none mt-3.5">
+                  It&apos;s <i className="text-blue-bright">live</i>.
+                </div>
+                <div className="mt-3 mono text-[11px] tracking-[0.18em] uppercase text-paper/60">
+                  Currently playing ·{" "}
+                  <b className="text-paper font-medium">{STAGE_LABELS[currentStage]}</b>
+                </div>
+                {nextStage ? (
+                  <div className="mt-5 flex items-end gap-3.5">
+                    <span className="serif font-semibold text-[180px] sm:text-[220px] tracking-[-0.07em] leading-[0.78] num">
+                      {daysToNextStage}
+                    </span>
+                    <div className="pb-3.5 mono text-[11px] tracking-[0.18em] uppercase text-paper/55 leading-[1.4] max-w-[120px]">
+                      {daysToNextStage === 1 ? "day" : "days"} to<br />
+                      <b className="text-paper font-medium">{STAGE_LABELS[nextStage]}</b>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mt-6 serif font-semibold text-[88px] sm:text-[110px] tracking-[-0.05em] leading-[0.85] text-paper">
+                    The <i className="text-blue-bright">final</i> stretch.
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                <div className="serif font-semibold text-[38px] tracking-[-0.025em] leading-none mt-3.5">
+                  The wait is <i className="text-blue-bright">almost</i> over.
+                </div>
+                <div className="mt-5 flex items-end gap-3.5">
+                  <span className="serif font-semibold text-[180px] sm:text-[220px] tracking-[-0.07em] leading-[0.78] num">
+                    {daysToStart}
+                  </span>
+                  <div className="pb-3.5 mono text-[11px] tracking-[0.18em] uppercase text-paper/55 leading-[1.4] max-w-[96px]">
+                    days<br />
+                    to <b className="text-paper font-medium">kickoff</b>
+                  </div>
+                </div>
+              </>
+            )}
             <div className="mt-6 pt-4 border-t border-paper/15 grid grid-cols-3 gap-6">
               <Stat label="Picks made" value={`${predictionCount ?? 0}`} sub={`/${totalMatches ?? 104}`} />
               <Stat label="Open now" value={`${openMatchesPicked}`} sub={`/${openMatchesTotal}`} />
@@ -300,9 +357,9 @@ export default async function DashboardPage() {
             value={accuracy !== null ? `${accuracy}` : "—"}
             sup={accuracy !== null ? "%" : undefined}
             sub={
-              myRank
-                ? `${myRank.correct_predictions} / ${myRank.total_predictions} CALLS`
-                : "no calls yet"
+              decidedCount && decidedCount > 0
+                ? `${myRank?.correct_predictions ?? 0} / ${decidedCount} PLAYED`
+                : "no results yet"
             }
           />
           <StatBox

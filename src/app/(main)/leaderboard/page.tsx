@@ -8,6 +8,7 @@ import type { LeaderboardEntry } from "@/lib/types";
 interface LeaderboardRow extends LeaderboardEntry {
   avatar_url: string | null;
   form: number[]; // last 5 scored predictions: 0 | 2 | 5
+  decided_predictions: number; // finished matches the user predicted (accuracy denominator)
 }
 
 export default async function LeaderboardPage() {
@@ -36,25 +37,47 @@ export default async function LeaderboardPage() {
 
   const finishedIds = new Set((finishedMatches ?? []).map((m) => m.id));
   const finishedOrder = (finishedMatches ?? []).map((m) => m.id);
+  const finishedIdArray = (finishedMatches ?? []).map((m) => m.id);
 
-  const { data: allPreds } = await supabase
-    .from("predictions")
-    .select("user_id, match_id, points_awarded")
-    .range(0, 9999);
+  // Fetch ALL predictions for finished matches. Supabase hard-caps every request
+  // at 1000 rows (and .range() can't exceed it), so we paginate with an explicit
+  // order until a short page comes back. Filtering to finished matches keeps the
+  // volume down; pagination makes it correct even with thousands of predictions.
+  const allPreds: { user_id: string; match_id: number; points_awarded: number }[] = [];
+  if (finishedIdArray.length > 0) {
+    const PAGE = 1000;
+    for (let from = 0; ; from += PAGE) {
+      const { data } = await supabase
+        .from("predictions")
+        .select("user_id, match_id, points_awarded")
+        .in("match_id", finishedIdArray)
+        .order("id", { ascending: true })
+        .range(from, from + PAGE - 1);
+      if (!data || data.length === 0) break;
+      allPreds.push(...data);
+      if (data.length < PAGE) break;
+    }
+  }
 
   // Group predictions by user, sorted by most-recent match first
   const formMap: Record<string, number[]> = {};
   const predsByUser: Record<string, { match_id: number; points: number }[]> = {};
-  for (const p of allPreds ?? []) {
+  for (const p of allPreds) {
     if (!finishedIds.has(p.match_id)) continue;
     if (!predsByUser[p.user_id]) predsByUser[p.user_id] = [];
     predsByUser[p.user_id].push({ match_id: p.match_id, points: p.points_awarded });
   }
+  // Accuracy denominator = matches that have actually been decided (finished)
+  // that the user predicted — NOT their total picks across the whole tournament.
+  const decidedMap: Record<string, number> = {};
+  const correctMap: Record<string, number> = {};
   for (const [uid, preds] of Object.entries(predsByUser)) {
     preds.sort(
       (a, b) => finishedOrder.indexOf(a.match_id) - finishedOrder.indexOf(b.match_id)
     );
     formMap[uid] = preds.slice(0, 5).map((p) => p.points);
+    decidedMap[uid] = preds.length;
+    correctMap[uid] = preds.filter((p) => p.points > 0).length;
   }
 
   // Users already in leaderboard table
@@ -69,6 +92,7 @@ export default async function LeaderboardPage() {
     weekly_points: r.weekly_points ?? 0,
     avatar_url: avatarById.get(r.user_id) ?? null,
     form: formMap[r.user_id] ?? [],
+    decided_predictions: decidedMap[r.user_id] ?? 0,
     updated_at: "",
   }));
 
@@ -86,10 +110,20 @@ export default async function LeaderboardPage() {
       weekly_points: 0,
       avatar_url: p.avatar_url ?? null,
       form: [],
+      decided_predictions: 0,
       updated_at: "",
     }));
 
-  const leaderboard = [...ranked, ...unranked];
+  // Order: by rank (points), then push players who haven't predicted any decided
+  // match to the bottom of their tier — so "guessed wrong" (has form) sits above
+  // "didn't guess" (no form) instead of being mixed together.
+  const leaderboard = [...ranked, ...unranked].sort((a, b) => {
+    if (a.rank !== b.rank) return a.rank - b.rank;
+    const aPlayed = a.decided_predictions > 0 ? 1 : 0;
+    const bPlayed = b.decided_predictions > 0 ? 1 : 0;
+    if (aPlayed !== bPlayed) return bPlayed - aPlayed; // players with results first
+    return a.display_name.localeCompare(b.display_name); // stable within group
+  });
   const totalPlayers = leaderboard.length;
 
   return (
@@ -161,9 +195,9 @@ export default async function LeaderboardPage() {
           {leaderboard.map((r, index) => {
             const isMe = r.user_id === user?.id;
             const accuracy =
-              r.total_predictions > 0
-                ? Math.round((r.correct_predictions / r.total_predictions) * 100)
-                : 0;
+              r.decided_predictions > 0
+                ? Math.round((r.correct_predictions / r.decided_predictions) * 100)
+                : null;
             const initial = r.display_name.charAt(0).toUpperCase();
             const rankDelta =
               r.previous_rank != null ? r.previous_rank - r.rank : null;
@@ -215,7 +249,7 @@ export default async function LeaderboardPage() {
                       )}
                     </div>
                     <span className="block mono text-[10px] tracking-[0.04em] text-muted-warm mt-0.5">
-                      {accuracy}% accurate · {r.total_points} pts total
+                      {accuracy != null ? `${accuracy}% accurate` : "no results yet"} · {r.total_points} pts total
                     </span>
                   </div>
                 </div>
@@ -227,7 +261,7 @@ export default async function LeaderboardPage() {
 
                 {/* Accuracy */}
                 <div className="hidden sm:block text-right mono text-[12px] font-semibold">
-                  {accuracy}%
+                  {accuracy != null ? `${accuracy}%` : "–"}
                 </div>
 
                 {/* Form / 5 */}
@@ -259,9 +293,9 @@ function PodiumSeat({
   isMe: boolean;
 }) {
   const accuracy =
-    entry.total_predictions > 0
-      ? Math.round((entry.correct_predictions / entry.total_predictions) * 100)
-      : 0;
+    entry.decided_predictions > 0
+      ? Math.round((entry.correct_predictions / entry.decided_predictions) * 100)
+      : null;
   const initial = entry.display_name.charAt(0).toUpperCase();
   const rankDelta =
     entry.previous_rank != null ? entry.previous_rank - entry.rank : null;
@@ -324,7 +358,7 @@ function PodiumSeat({
         </span>
       </div>
       <div className="flex gap-3 justify-center mt-3.5 mono text-[10px] tracking-[0.1em] uppercase opacity-75">
-        <span>{accuracy}% acc</span>
+        <span>{accuracy != null ? `${accuracy}% acc` : "no results"}</span>
         {rankDelta != null && rankDelta !== 0 && (
           <span>{rankDelta > 0 ? `▲ ${rankDelta}` : `▼ ${Math.abs(rankDelta)}`}</span>
         )}

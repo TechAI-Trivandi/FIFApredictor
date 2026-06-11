@@ -11,6 +11,7 @@ interface PlayerData {
   total_points: number;
   correct_predictions: number;
   total_predictions: number;
+  decided_predictions: number;
   rank: number;
   weekly_points: number;
   form: number[];
@@ -33,9 +34,9 @@ export function PlayerAvatar({
   const cardRef = useRef<HTMLDivElement>(null);
   const initial = player.display_name.charAt(0).toUpperCase();
   const accuracy =
-    player.total_predictions > 0
-      ? Math.round((player.correct_predictions / player.total_predictions) * 100)
-      : 0;
+    player.decided_predictions > 0
+      ? Math.round((player.correct_predictions / player.decided_predictions) * 100)
+      : null;
 
   const calcPosition = useCallback(() => {
     if (!btnRef.current) return;
@@ -159,8 +160,8 @@ export function PlayerAvatar({
 
               {/* Stats grid */}
               <div className="grid grid-cols-3 gap-px bg-line mt-5 border border-line">
-                <StatCell label="Accuracy" value={`${accuracy}%`} />
-                <StatCell label="Predictions" value={`${player.total_predictions}`} />
+                <StatCell label="Accuracy" value={accuracy != null ? `${accuracy}%` : "–"} />
+                <StatCell label="Picks Made" value={`${player.total_predictions}`} />
                 <StatCell
                   label="This Week"
                   value={player.weekly_points > 0 ? `+${player.weekly_points}` : `${player.weekly_points}`}
@@ -193,9 +194,11 @@ export function PlayerAvatar({
                 </div>
               )}
 
-              {/* Correct / Total */}
+              {/* Correct / decided */}
               <div className="mono text-[10px] tracking-[0.04em] text-muted-warm text-center mt-4">
-                {player.correct_predictions} correct out of {player.total_predictions} predictions
+                {player.decided_predictions > 0
+                  ? `${player.correct_predictions} correct out of ${player.decided_predictions} played`
+                  : "No matches decided yet"}
               </div>
             </div>
           )}

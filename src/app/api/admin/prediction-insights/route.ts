@@ -17,24 +17,30 @@ export async function GET() {
   const admin = createAdminClient();
 
   const { data: allProfiles } = await admin.from("profiles").select("id, display_name");
-  const { count: totalPredictions } = await admin.from("predictions").select("*", { count: "exact", head: true });
-
-  // Per-user prediction counts using the admin client (no row limit)
   const profiles = allProfiles ?? [];
-  const predCountByUser: Record<string, number> = {};
 
-  // Fetch in batches per user to avoid any row limits
-  for (const p of profiles) {
-    const { count } = await admin
+  // Count every prediction per user with a SINGLE paginated sweep instead of one
+  // count query per user. Supabase caps each request at 1000 rows, so we page
+  // through user_id in 1000-row chunks — a handful of requests total, vs. 60+.
+  const predCountByUser: Record<string, number> = {};
+  let total = 0;
+  const PAGE = 1000;
+  for (let from = 0; ; from += PAGE) {
+    const { data } = await admin
       .from("predictions")
-      .select("*", { count: "exact", head: true })
-      .eq("user_id", p.id);
-    predCountByUser[p.id] = count ?? 0;
+      .select("user_id")
+      .order("id", { ascending: true })
+      .range(from, from + PAGE - 1);
+    if (!data || data.length === 0) break;
+    for (const row of data) {
+      predCountByUser[row.user_id] = (predCountByUser[row.user_id] ?? 0) + 1;
+      total++;
+    }
+    if (data.length < PAGE) break;
   }
 
   const withPreds = profiles.filter((p) => (predCountByUser[p.id] ?? 0) > 0);
   const withoutPreds = profiles.filter((p) => (predCountByUser[p.id] ?? 0) === 0);
-  const total = totalPredictions ?? 0;
 
   const recentPredictions = profiles
     .map((p) => ({ display_name: p.display_name, count: predCountByUser[p.id] ?? 0 }))
