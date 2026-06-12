@@ -72,10 +72,13 @@ export default async function LeaderboardPage() {
   const decidedMap: Record<string, number> = {};
   const correctMap: Record<string, number> = {};
   for (const [uid, preds] of Object.entries(predsByUser)) {
+    // preds sorted most-recent-first (finishedOrder is kickoff DESC)
     preds.sort(
       (a, b) => finishedOrder.indexOf(a.match_id) - finishedOrder.indexOf(b.match_id)
     );
-    formMap[uid] = preds.slice(0, 5).map((p) => p.points);
+    // Take the 5 most recent, then reverse to chronological order so the blocks
+    // read oldest → newest left-to-right (newest on the right, like a form guide).
+    formMap[uid] = preds.slice(0, 5).map((p) => p.points).reverse();
     decidedMap[uid] = preds.length;
     correctMap[uid] = preds.filter((p) => p.points > 0).length;
   }
